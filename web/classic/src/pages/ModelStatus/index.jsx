@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Card,
@@ -82,6 +82,86 @@ const formatTimestamp = (ts) => {
   } catch {
     return '-';
   }
+};
+
+const HistoryStrip = ({ history }) => {
+  const { t } = useTranslation();
+  const stripRef = useRef(null);
+
+  useEffect(() => {
+    const el = stripRef.current;
+    if (el) {
+      // Latest bucket is at the right edge; default scrollLeft=0 hides it
+      // behind overflow. Pin to the right so users see the newest data first.
+      el.scrollLeft = el.scrollWidth;
+    }
+  }, [history]);
+
+  if (!Array.isArray(history) || history.length === 0) {
+    return (
+      <Text type='secondary' size='small'>
+        {t('暂无数据')}
+      </Text>
+    );
+  }
+
+  return (
+    <div className='history-squares' ref={stripRef}>
+      {history.map((bucket, idx) => {
+        const status = bucket?.status;
+        let cls = 'unknown';
+        let resultLabel = t('暂无数据');
+        if (status === 1) {
+          cls = 'success';
+          resultLabel = t('正常');
+        } else if (status === 0) {
+          cls = 'error';
+          resultLabel = t('全部失败');
+        }
+        const tsStart = bucket?.ts_start;
+        const tsEnd = bucket?.ts_end;
+        const sampleSize = bucket?.sample_size || 0;
+        const popoverContent = (
+          <div className='history-popover'>
+            <div className='popover-row'>
+              <span className='popover-label'>{t('时间')}</span>
+              <span className='popover-value mono'>
+                {formatTimestamp(tsStart)} - {formatTimestamp(tsEnd)}
+              </span>
+            </div>
+            <div className='popover-row'>
+              <span className='popover-label'>{t('结果')}</span>
+              <span
+                className={`popover-value ${status === 1 ? 'ok' : status === 0 ? 'bad' : ''}`}
+              >
+                {resultLabel}
+              </span>
+            </div>
+            <div className='popover-row'>
+              <span className='popover-label'>{t('样本数')}</span>
+              <span className='popover-value mono'>{sampleSize}</span>
+            </div>
+          </div>
+        );
+        return (
+          <Popover
+            key={idx}
+            content={popoverContent}
+            trigger='click'
+            position='top'
+            showArrow
+          >
+            <span
+              className={`history-square clickable ${cls}`}
+              style={squareStyle(cls)}
+              role='button'
+              tabIndex={0}
+            />
+          </Popover>
+        );
+      })}
+    </div>
+  );
 };
 
 const ModelStatusPage = () => {
@@ -215,73 +295,6 @@ const ModelStatusPage = () => {
     );
   };
 
-  const renderHistoryStrip = (history) => {
-    if (!Array.isArray(history) || history.length === 0) {
-      return (
-        <Text type='secondary' size='small'>
-          {t('暂无数据')}
-        </Text>
-      );
-    }
-    return (
-      <div className='history-squares'>
-        {history.map((bucket, idx) => {
-          const status = bucket?.status;
-          let cls = 'unknown';
-          let resultLabel = t('暂无数据');
-          if (status === 1) {
-            cls = 'success';
-            resultLabel = t('正常');
-          } else if (status === 0) {
-            cls = 'error';
-            resultLabel = t('全部失败');
-          }
-          const tsStart = bucket?.ts_start;
-          const tsEnd = bucket?.ts_end;
-          const sampleSize = bucket?.sample_size || 0;
-          const popoverContent = (
-            <div className='history-popover'>
-              <div className='popover-row'>
-                <span className='popover-label'>{t('时间')}</span>
-                <span className='popover-value mono'>
-                  {formatTimestamp(tsStart)} - {formatTimestamp(tsEnd)}
-                </span>
-              </div>
-              <div className='popover-row'>
-                <span className='popover-label'>{t('结果')}</span>
-                <span
-                  className={`popover-value ${status === 1 ? 'ok' : status === 0 ? 'bad' : ''}`}
-                >
-                  {resultLabel}
-                </span>
-              </div>
-              <div className='popover-row'>
-                <span className='popover-label'>{t('样本数')}</span>
-                <span className='popover-value mono'>{sampleSize}</span>
-              </div>
-            </div>
-          );
-          return (
-            <Popover
-              key={idx}
-              content={popoverContent}
-              trigger='click'
-              position='top'
-              showArrow
-            >
-              <span
-                className={`history-square clickable ${cls}`}
-                style={squareStyle(cls)}
-                role='button'
-                tabIndex={0}
-              />
-            </Popover>
-          );
-        })}
-      </div>
-    );
-  };
-
   const channelColumns = [
     {
       title: t('Channel'),
@@ -376,7 +389,7 @@ const ModelStatusPage = () => {
               <span className='uptime-label'>{t('24小时可用率')}</span>
               <span className='uptime-value'>{uptime}</span>
             </div>
-            <div className='history-cell'>{renderHistoryStrip(m.history)}</div>
+            <div className='history-cell'><HistoryStrip history={m.history} /></div>
           </div>
         </div>
 
@@ -455,7 +468,7 @@ const ModelStatusPage = () => {
 
         <div className='msp-toolbar'>
           <Input
-            prefix={<Search size={14} />}
+            prefix={<Search size={14} style={{ marginRight: 6 }} />}
             placeholder={t('搜索模型')}
             value={search}
             onChange={(v) => setSearch(v)}
@@ -539,7 +552,7 @@ const ModelStatusPage = () => {
             margin-bottom: 16px;
             flex-wrap: wrap;
           }
-          .msp-search { width: 280px; }
+          .msp-search { width: 280px; padding: 0 5px; }
           .msp-filter-chips { display: flex; gap: 8px; flex-wrap: wrap; }
           .filter-chip { cursor: pointer; user-select: none; opacity: 0.55; transition: opacity 0.15s; }
           .filter-chip.active { opacity: 1; }
