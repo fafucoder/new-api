@@ -52,6 +52,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       log: true,
       midjourney: true,
       task: true,
+      status: true,
     },
     personal: {
       enabled: true,
@@ -113,6 +114,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         log: true,
         midjourney: true,
         task: true,
+        status: true,
       },
       personal: {
         enabled: true,
@@ -174,6 +176,10 @@ export default function SettingsSidebarModulesAdmin(props) {
     if (props.options && props.options.SidebarModulesAdmin) {
       try {
         const modules = JSON.parse(props.options.SidebarModulesAdmin);
+        // 规范化配置，确保新添加的模块有默认值
+        if (modules.console && modules.console.status === undefined) {
+          modules.console.status = true;
+        }
         setSidebarModulesAdmin(modules);
       } catch (error) {
         // 使用默认配置
@@ -186,6 +192,7 @@ export default function SettingsSidebarModulesAdmin(props) {
             log: true,
             midjourney: true,
             task: true,
+            status: true,
           },
           personal: { enabled: true, topup: true, personal: true },
           admin: {
@@ -233,6 +240,7 @@ export default function SettingsSidebarModulesAdmin(props) {
           description: t('绘图任务记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
+        { key: 'status', title: t('服务状态'), description: t('服务状态监控') },
       ],
     },
     {

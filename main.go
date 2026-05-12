@@ -113,6 +113,9 @@ func main() {
 
 	go controller.AutomaticallyTestChannels()
 
+	// Periodically purge channel uptime history beyond the 7-day retention window.
+	go service.AutomaticallyCleanupUptimeRecords()
+
 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
 	service.StartCodexCredentialAutoRefreshTask()
 

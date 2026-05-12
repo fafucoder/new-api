@@ -53,8 +53,10 @@ import SetupCheck from './components/layout/SetupCheck';
 const Home = lazy(() => import('./pages/Home'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const About = lazy(() => import('./pages/About'));
+const Tutorial = lazy(() => import('./pages/Tutorial'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const Status = lazy(() => import('./pages/Status'));
 
 function DynamicOAuth2Callback() {
   const { provider } = useParams();
@@ -316,6 +318,16 @@ function App() {
           }
         />
         <Route
+          path='/console/status'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <Status />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
           path='/pricing'
           element={
             pricingRequireAuth ? (
@@ -339,6 +351,14 @@ function App() {
           element={
             <Suspense fallback={<Loading></Loading>} key={location.pathname}>
               <About />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/tutorial'
+          element={
+            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+              <Tutorial />
             </Suspense>
           }
         />

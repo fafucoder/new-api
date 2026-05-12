@@ -176,6 +176,12 @@ func SetApiRouter(router *gin.Engine) {
 		apiRouter.GET("/subscription/epay/notify", controller.SubscriptionEpayNotify)
 		apiRouter.GET("/subscription/epay/return", controller.SubscriptionEpayReturn)
 		apiRouter.POST("/subscription/epay/return", controller.SubscriptionEpayReturn)
+
+		channelUptimeRoute := apiRouter.Group("/channel-uptime")
+		channelUptimeRoute.Use(middleware.UserAuth())
+		{
+			channelUptimeRoute.GET("/status", controller.GetChannelUptimeStatus)
+		}
 		optionRoute := apiRouter.Group("/option")
 		optionRoute.Use(middleware.RootAuth())
 		{

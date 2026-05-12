@@ -933,6 +933,7 @@ func testAllChannels(notify bool) error {
 			}
 
 			channel.UpdateResponseTime(milliseconds)
+			recordChannelUptimeAsync(channel, milliseconds, newAPIError)
 			time.Sleep(common.RequestInterval)
 		}
 
@@ -979,6 +980,34 @@ func AutomaticallyTestChannels() {
 					break
 				}
 			}
+		}
+	})
+}
+
+// recordChannelUptimeAsync writes a single uptime history row in the
+// background. Failures are logged only — they must never break the surrounding
+// test loop or affect channel disable/enable decisions.
+func recordChannelUptimeAsync(channel *model.Channel, milliseconds int64, newAPIError *types.NewAPIError) {
+	if channel == nil {
+		return
+	}
+	record := &model.ChannelUptimeRecord{
+		ChannelId:      channel.Id,
+		ChannelType:    channel.Type,
+		ResponseTimeMs: int(milliseconds),
+		CreatedTime:    common.GetTimestamp(),
+	}
+	if newAPIError == nil {
+		record.Status = model.ChannelUptimeStatusSuccess
+		record.StatusCode = http.StatusOK
+	} else {
+		record.Status = model.ChannelUptimeStatusFailure
+		record.StatusCode = newAPIError.StatusCode
+		record.ErrorMessage = newAPIError.Error()
+	}
+	gopool.Go(func() {
+		if err := model.RecordChannelUptime(record); err != nil {
+			common.SysError("record channel uptime failed: " + err.Error())
 		}
 	})
 }

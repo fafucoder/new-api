@@ -42,6 +42,7 @@ const routerMap = {
   midjourney: '/console/midjourney',
   setting: '/console/setting',
   about: '/about',
+  tutorial: '/tutorial',
   detail: '/console',
   pricing: '/pricing',
   task: '/console/task',
@@ -49,6 +50,7 @@ const routerMap = {
   deployment: '/console/deployment',
   playground: '/console/playground',
   personal: '/console/personal',
+  status: '/console/status',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
@@ -105,6 +107,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className:
           localStorage.getItem('enable_task') === 'true' ? '' : 'tableHiddle',
       },
+      {
+        text: t('服务状态'),
+        itemKey: 'status',
+        to: '/console/status',
+      },
     ];
 
     // 根据配置过滤项目
@@ -145,8 +152,15 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     return filteredItems;
   }, [t, isModuleVisible]);
 
+  const tutorialItem = {
+    text: t('使用教程'),
+    itemKey: 'tutorial',
+    to: '/tutorial',
+  };
+
   const adminItems = useMemo(() => {
     const items = [
+      tutorialItem,
       {
         text: t('渠道管理'),
         itemKey: 'channel',
