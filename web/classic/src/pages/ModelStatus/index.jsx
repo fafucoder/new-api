@@ -54,8 +54,8 @@ const SQUARE_COLORS = {
 
 const squareStyle = (cls) => ({
   display: 'inline-block',
-  width: 8,
-  height: 16,
+  width: 10,
+  height: 18,
   borderRadius: 2,
   backgroundColor: SQUARE_COLORS[cls] || SQUARE_COLORS.unknown,
   verticalAlign: 'top',
@@ -656,7 +656,7 @@ const ModelStatusPage = () => {
             display: flex;
             flex-wrap: nowrap;
             gap: 2px;
-            max-width: 380px;
+            max-width: 420px;
             overflow-x: auto;
           }
           .history-square { flex-shrink: 0; }
@@ -664,7 +664,10 @@ const ModelStatusPage = () => {
             cursor: pointer;
             transition: transform 0.1s ease;
           }
-          .history-square.clickable:hover { transform: scaleY(1.2); }
+          .history-square.clickable:hover { transform: scaleY(1.15); }
+          .history-square.success { background-color: var(--semi-color-success) !important; }
+          .history-square.error { background-color: var(--semi-color-danger) !important; }
+          .history-square.unknown { background-color: var(--semi-color-fill-2) !important; }
 
           .history-popover {
             display: flex;
