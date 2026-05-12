@@ -51,6 +51,7 @@ const routerMap = {
   playground: '/console/playground',
   personal: '/console/personal',
   status: '/console/status',
+  modelStatus: '/console/model-status',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
@@ -111,6 +112,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('服务状态'),
         itemKey: 'status',
         to: '/console/status',
+      },
+      {
+        text: t('模型状态'),
+        itemKey: 'modelStatus',
+        to: '/console/model-status',
       },
     ];
 

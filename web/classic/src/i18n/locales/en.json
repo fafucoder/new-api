@@ -4044,6 +4044,15 @@
     "Worker密钥": "Worker Key",
     "WSL2 中环境变量问题": "",
     "X 也可以小于 1，当折扣用。想做\"只给输出加价\"或\"额外加固定费用\"，请直接写完整计费公式。": "",
-    "Zsh 用户：": ""
+    "Zsh 用户：": "",
+    "模型状态": "Model Status",
+    "模型可用性监控": "Model availability monitoring",
+    "查看模型在所有承载渠道上的近 24 小时可用性": "Model availability across all serving channels over the last 24 hours",
+    "正常模型": "Healthy models",
+    "降级模型": "Degraded models",
+    "故障模型": "Failing models",
+    "个渠道": "channels",
+    "样本数": "Samples",
+    "Channel": "Channel"
   }
 }

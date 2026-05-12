@@ -53,6 +53,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       midjourney: true,
       task: true,
       status: true,
+      modelStatus: true,
     },
     personal: {
       enabled: true,
@@ -115,6 +116,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         midjourney: true,
         task: true,
         status: true,
+        modelStatus: true,
       },
       personal: {
         enabled: true,
@@ -180,6 +182,9 @@ export default function SettingsSidebarModulesAdmin(props) {
         if (modules.console && modules.console.status === undefined) {
           modules.console.status = true;
         }
+        if (modules.console && modules.console.modelStatus === undefined) {
+          modules.console.modelStatus = true;
+        }
         setSidebarModulesAdmin(modules);
       } catch (error) {
         // 使用默认配置
@@ -193,6 +198,7 @@ export default function SettingsSidebarModulesAdmin(props) {
             midjourney: true,
             task: true,
             status: true,
+            modelStatus: true,
           },
           personal: { enabled: true, topup: true, personal: true },
           admin: {
@@ -241,6 +247,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
         { key: 'status', title: t('服务状态'), description: t('服务状态监控') },
+        { key: 'modelStatus', title: t('模型状态'), description: t('模型可用性监控') },
       ],
     },
     {
