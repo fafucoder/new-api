@@ -182,6 +182,11 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			channelUptimeRoute.GET("/status", controller.GetChannelUptimeStatus)
 		}
+		modelUptimeRoute := apiRouter.Group("/model-uptime")
+		modelUptimeRoute.Use(middleware.UserAuth())
+		{
+			modelUptimeRoute.GET("/status", controller.GetModelUptimeStatus)
+		}
 		optionRoute := apiRouter.Group("/option")
 		optionRoute.Use(middleware.RootAuth())
 		{
