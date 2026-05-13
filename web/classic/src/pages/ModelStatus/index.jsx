@@ -669,9 +669,10 @@ const ModelStatusPage = () => {
             display: flex;
             flex-wrap: nowrap;
             gap: 2px;
-            max-width: 420px;
-            overflow-x: auto;
+            width: 420px;
+            overflow: hidden;
           }
+          .history-squares::-webkit-scrollbar { display: none; }
           .history-square { flex-shrink: 0; }
           .history-square.clickable {
             cursor: pointer;
