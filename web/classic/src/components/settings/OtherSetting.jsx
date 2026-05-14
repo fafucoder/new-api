@@ -150,6 +150,7 @@ const OtherSetting = () => {
   };
   // 个性化设置
   const formAPIPersonalization = useRef();
+  const logoFileInputRef = useRef(null);
   //  个性化设置 - SystemName
   const submitSystemName = async () => {
     try {
@@ -179,6 +180,44 @@ const OtherSetting = () => {
     } catch (error) {
       console.error('Logo 更新失败', error);
       showError('Logo 更新失败');
+    } finally {
+      setLoadingInput((loadingInput) => ({ ...loadingInput, Logo: false }));
+    }
+  };
+  // 个性化设置 - Logo 本地上传
+  const handleLogoUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showError(t('请选择图片文件'));
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showError(t('图片大小不能超过 10MB'));
+      return;
+    }
+
+    try {
+      setLoadingInput((loadingInput) => ({ ...loadingInput, Logo: true }));
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await API.post('/api/option/upload_logo', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const { success, message, data } = res.data;
+      if (!success) {
+        showError(message || t('Logo 上传失败'));
+        return;
+      }
+      const url = data;
+      formAPIPersonalization.current?.setValue?.('Logo', url);
+      await updateOption('Logo', url);
+      showSuccess(t('Logo 已上传并更新'));
+    } catch (error) {
+      console.error(t('Logo 上传失败'), error);
+      showError(t('Logo 上传失败'));
     } finally {
       setLoadingInput((loadingInput) => ({ ...loadingInput, Logo: false }));
     }
@@ -483,13 +522,28 @@ const OtherSetting = () => {
               </Button>
               <Form.Input
                 label={t('Logo 图片地址')}
-                placeholder={t('在此输入 Logo 图片地址')}
+                placeholder={t('在此输入 Logo 图片地址，或点击下方按钮上传本地图片')}
                 field={'Logo'}
                 onChange={handleInputChange}
               />
-              <Button onClick={submitLogo} loading={loadingInput['Logo']}>
-                {t('设置 Logo')}
-              </Button>
+              <input
+                type='file'
+                accept='image/*'
+                ref={logoFileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleLogoUpload}
+              />
+              <Space>
+                <Button onClick={submitLogo} loading={loadingInput['Logo']}>
+                  {t('设置 Logo')}
+                </Button>
+                <Button
+                  onClick={() => logoFileInputRef.current?.click()}
+                  loading={loadingInput['Logo']}
+                >
+                  {t('上传 Logo')}
+                </Button>
+              </Space>
               <Form.TextArea
                 label={t('首页内容')}
                 placeholder={t(
