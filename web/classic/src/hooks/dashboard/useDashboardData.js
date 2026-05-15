@@ -76,6 +76,9 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     tpm: [],
   });
 
+  // ========== 缓存命中率数据 ==========
+  const [cacheHitStats, setCacheHitStats] = useState({ today: null, lifetime: null });
+
   // ========== Uptime 数据 ==========
   const [uptimeData, setUptimeData] = useState([]);
   const [uptimeLoading, setUptimeLoading] = useState(false);
@@ -234,6 +237,20 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     }
   }, [inputs, isAdminUser]);
 
+  const loadCacheHitStats = useCallback(async () => {
+    try {
+      const res = await API.get('/api/cache_hit_stats/me');
+      if (res.data.success) {
+        setCacheHitStats({
+          today: res.data.data.today,
+          lifetime: res.data.data.lifetime,
+        });
+      }
+    } catch (e) {
+      // silently ignore
+    }
+  }, []);
+
   const getUserData = useCallback(async () => {
     let res = await API.get(`/api/user/self`);
     const { success, message, data } = res.data;
@@ -272,6 +289,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   useEffect(() => {
     if (!initialized.current) {
       getUserData();
+      loadCacheHitStats();
       initialized.current = true;
     }
   }, [getUserData]);
@@ -314,6 +332,9 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     uptimeLoading,
     activeUptimeTab,
     setActiveUptimeTab,
+
+    // 缓存命中率
+    cacheHitStats,
 
     // 计算值
     timeOptions,

@@ -282,6 +282,7 @@ func migrateDB() error {
 		&UserOAuthBinding{},
 		&PerfMetric{},
 		&ChannelUptimeRecord{},
+		&CacheHitStats{},
 	)
 	if err != nil {
 		return err

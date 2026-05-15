@@ -18,10 +18,12 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Avatar, Skeleton, Tag } from '@douyinfe/semi-ui';
+import { Card, Avatar, Skeleton, Tag, Tooltip } from '@douyinfe/semi-ui';
 import { VChart } from '@visactor/react-vchart';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { HelpCircle } from 'lucide-react';
+import { useActualTheme } from '../../context/Theme';
 
 const StatsCards = ({
   groupedStatsData,
@@ -32,9 +34,11 @@ const StatsCards = ({
 }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const theme = useActualTheme();
+
   return (
     <div className='mb-4'>
-      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4'>
+      <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4'>
         {groupedStatsData.map((group, idx) => (
           <Card
             key={idx}
@@ -58,8 +62,31 @@ const StatsCards = ({
                       {item.icon}
                     </Avatar>
                     <div>
-                      <div className='text-xs text-gray-500'>{item.title}</div>
-                      <div className='text-lg font-semibold'>
+                      <div
+                        className={`text-xs flex items-center gap-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}
+                      >
+                        {item.title}
+                        {item.tooltip && (
+                          <Tooltip
+                            content={item.tooltip}
+                            position='bottom'
+                            theme={theme}
+                            style={{
+                              backgroundColor:
+                                theme === 'dark' ? '#1a1a1a' : '#fff',
+                            }}
+                            bodyStyle={{ padding: 0 }}
+                          >
+                            <HelpCircle
+                              size={12}
+                              className={`cursor-help flex-shrink-0 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}
+                            />
+                          </Tooltip>
+                        )}
+                      </div>
+                      <div
+                        className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}
+                      >
                         <Skeleton
                           loading={loading}
                           active

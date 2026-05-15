@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import { useMemo } from 'react';
-import { Wallet, Activity, Zap, Gauge } from 'lucide-react';
+import { Wallet, Activity, Zap, Gauge, BarChart2 } from 'lucide-react';
 import {
   IconMoneyExchangeStroked,
   IconHistogram,
@@ -31,6 +31,8 @@ import {
 } from '@douyinfe/semi-icons';
 import { renderQuota } from '../../helpers';
 import { createSectionTitle } from '../../helpers/dashboard';
+import { useActualTheme } from '../../context/Theme';
+import i18n from '../../i18n/i18n';
 
 export const useDashboardStats = (
   userState,
@@ -41,12 +43,71 @@ export const useDashboardStats = (
   performanceMetrics,
   navigate,
   t,
+  cacheHitStats,
 ) => {
+  const theme = useActualTheme();
+  
+  const fmtRate = (r) => (r == null ? '—' : `${r.toFixed(2)}%`);
+  const fmtNum = (n) => {
+    if (n == null) return '0';
+    const locale = i18n.language?.startsWith('zh') ? 'zh' : 'en';
+    return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 2 }).format(n);
+  };
+
+  const cacheTooltip = (stats) => {
+    if (!stats) return null;
+    const total = (stats.cache_read || 0) + (stats.input || 0) + (stats.cache_write || 0);
+    const hitRate = total > 0 ? ((stats.cache_read || 0) / total * 100).toFixed(2) : '0.00';
+    const isDark = theme === 'dark';
+
+    const colors = {
+      title: isDark ? '#fff' : '#1a1a1a',
+      secondary: isDark ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)',
+      muted: isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)',
+      value: isDark ? '#fff' : '#1a1a1a',
+      border: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+      highlightBg: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+    };
+
+    const statRow = (label, value) => (
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ color: colors.muted }}>{label}</span>
+        <span style={{ color: colors.value }}>{value}</span>
+      </div>
+    );
+
+    const formulaItems = [
+      { label: t('缓存读取'), value: fmtNum(stats.cache_read) },
+      { label: t('输入 Token'), value: fmtNum(stats.input) },
+      { label: t('缓存创建 Token'), value: fmtNum(stats.cache_write) },
+    ];
+
+    return (
+      <div style={{ fontSize: 12, lineHeight: 1.8, padding: 4, minWidth: 220, backgroundColor: 'transparent' }}>
+        <div style={{ fontWeight: 600, marginBottom: 10, color: colors.title }}>{t('缓存命中率计算公式')}</div>
+        <div style={{ backgroundColor: colors.highlightBg, padding: 10, borderRadius: 6, marginBottom: 12, wordBreak: 'break-all' }}>
+          <div style={{ color: colors.secondary }}>
+            {t('缓存命中率')} = {t('缓存读取')} / ({t('缓存读取')} + {t('输入')} + {t('缓存写入')}) × 100%
+          </div>
+        </div>
+        {formulaItems.map(item => statRow(item.label, item.value))}
+        <div style={{ borderTop: `1px solid ${colors.border}`, marginTop: 8, paddingTop: 8 }}>
+          {statRow(t('总计'), fmtNum(total))}
+          {statRow(t('命中率'), `${hitRate}%`)}
+        </div>
+      </div>
+    );
+  };
+
+  const getThemeBgColor = () => {
+    return theme === 'dark' ? 'bg-gray-800' : 'bg-blue-50';
+  };
+
   const groupedStatsData = useMemo(
     () => [
       {
         title: createSectionTitle(Wallet, t('账户数据')),
-        color: 'bg-blue-50',
+        color: getThemeBgColor(),
         items: [
           {
             title: t('当前余额'),
@@ -67,8 +128,32 @@ export const useDashboardStats = (
         ],
       },
       {
+        title: createSectionTitle(BarChart2, t('缓存数据')),
+        color: getThemeBgColor(),
+        items: [
+          {
+            title: t('今日缓存命中率'),
+            value: fmtRate(cacheHitStats?.today?.hit_rate),
+            icon: <IconPulse />,
+            avatarColor: 'teal',
+            trendData: [],
+            trendColor: '#14b8a6',
+            tooltip: cacheTooltip(cacheHitStats?.today),
+          },
+          {
+            title: t('历史缓存命中率'),
+            value: fmtRate(cacheHitStats?.lifetime?.hit_rate),
+            icon: <IconHistogram />,
+            avatarColor: 'cyan',
+            trendData: [],
+            trendColor: '#06b6d4',
+            tooltip: cacheTooltip(cacheHitStats?.lifetime),
+          },
+        ],
+      },
+      {
         title: createSectionTitle(Activity, t('使用统计')),
-        color: 'bg-green-50',
+        color: getThemeBgColor(),
         items: [
           {
             title: t('请求次数'),
@@ -90,7 +175,7 @@ export const useDashboardStats = (
       },
       {
         title: createSectionTitle(Zap, t('资源消耗')),
-        color: 'bg-yellow-50',
+        color: getThemeBgColor(),
         items: [
           {
             title: t('统计额度'),
@@ -112,7 +197,7 @@ export const useDashboardStats = (
       },
       {
         title: createSectionTitle(Gauge, t('性能指标')),
-        color: 'bg-indigo-50',
+        color: getThemeBgColor(),
         items: [
           {
             title: t('平均RPM'),
@@ -144,6 +229,8 @@ export const useDashboardStats = (
       performanceMetrics,
       navigate,
       t,
+      cacheHitStats,
+      theme,
     ],
   );
 

@@ -52,6 +52,7 @@ const routerMap = {
   personal: '/console/personal',
   status: '/console/status',
   modelStatus: '/console/model-status',
+  cacheHitStats: '/console/cache-hit-stats',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
@@ -76,7 +77,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
       {
         text: t('数据看板'),
         itemKey: 'detail',
-        to: '/detail',
+        to: '/console',
         className:
           localStorage.getItem('enable_data_export') === 'true'
             ? ''
@@ -183,6 +184,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('模型管理'),
         itemKey: 'models',
         to: '/console/models',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('缓存管理'),
+        itemKey: 'cacheHitStats',
+        to: '/console/cache-hit-stats',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {

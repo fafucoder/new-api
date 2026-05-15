@@ -158,6 +158,8 @@ export function getLucideIcon(key, selected = false) {
       return <Activity {...commonProps} color={iconColor} />;
     case 'modelStatus':
       return <Boxes {...commonProps} color={iconColor} />;
+    case 'cacheHitStats':
+      return <BarChart3 {...commonProps} color={iconColor} />;
     default:
       return <CircleUser {...commonProps} color={iconColor} />;
   }

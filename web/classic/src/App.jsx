@@ -58,6 +58,7 @@ const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const Status = lazy(() => import('./pages/Status'));
 const ModelStatus = lazy(() => import('./pages/ModelStatus'));
+const CacheHitStats = lazy(() => import('./pages/CacheHitStats'));
 
 function DynamicOAuth2Callback() {
   const { provider } = useParams();
@@ -334,6 +335,16 @@ function App() {
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <ModelStatus />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/cache-hit-stats'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <CacheHitStats />
               </Suspense>
             </PrivateRoute>
           }

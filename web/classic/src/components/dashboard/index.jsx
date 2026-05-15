@@ -83,6 +83,7 @@ const Dashboard = () => {
     dashboardData.performanceMetrics,
     dashboardData.navigate,
     dashboardData.t,
+    dashboardData.cacheHitStats,
   );
 
   // ========== 数据处理 ==========

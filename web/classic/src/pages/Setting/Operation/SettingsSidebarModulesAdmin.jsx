@@ -69,6 +69,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       user: true,
       subscription: true,
       setting: true,
+      cacheHitStats: true,
     },
   });
 
@@ -132,6 +133,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         user: true,
         subscription: true,
         setting: true,
+        cacheHitStats: true,
       },
     };
     setSidebarModulesAdmin(defaultModules);
@@ -185,6 +187,9 @@ export default function SettingsSidebarModulesAdmin(props) {
         if (modules.console && modules.console.modelStatus === undefined) {
           modules.console.modelStatus = true;
         }
+        if (modules.admin && modules.admin.cacheHitStats === undefined) {
+          modules.admin.cacheHitStats = true;
+        }
         setSidebarModulesAdmin(modules);
       } catch (error) {
         // 使用默认配置
@@ -210,6 +215,7 @@ export default function SettingsSidebarModulesAdmin(props) {
             user: true,
             subscription: true,
             setting: true,
+            cacheHitStats: true,
           },
         };
         setSidebarModulesAdmin(defaultModules);
@@ -291,6 +297,7 @@ export default function SettingsSidebarModulesAdmin(props) {
           title: t('系统设置'),
           description: t('系统参数配置'),
         },
+        { key: 'cacheHitStats', title: t('缓存管理'), description: t('缓存命中率统计') },
       ],
     },
   ];
