@@ -177,11 +177,18 @@ func computeModelStatus(channelIds map[int]struct{}, latestPerChannel map[int]Ch
 
 // computeUptime24h returns the success rate over the 24h record set scoped to
 // the model's channel ids. nil when there are no records in window.
-func computeUptime24h(channelIds map[int]struct{}, records []ChannelUptimeRecord) *float64 {
+// computeUptime24h returns the success rate over the 24h record set scoped to
+// the model's channel ids. sinceUnix lets callers pass a wider record slice
+// (e.g. one that also covers the bucket strip window) and still keep uptime%
+// scoped to the last 24h. nil when there are no qualifying records.
+func computeUptime24h(channelIds map[int]struct{}, records []ChannelUptimeRecord, sinceUnix int64) *float64 {
 	total := 0
 	success := 0
 	for _, r := range records {
 		if _, ok := channelIds[r.ChannelId]; !ok {
+			continue
+		}
+		if r.CreatedTime < sinceUnix {
 			continue
 		}
 		total++
@@ -210,16 +217,19 @@ func computeLastCheck(channelIds map[int]struct{}, latestPerChannel map[int]Chan
 	return last
 }
 
-// computeBuckets distributes records into 75 buckets across the last 24h.
-// Each bucket: 1 if any channel had success, 0 if only failures, -1 if empty.
-func computeBuckets(channelIds map[int]struct{}, records []ChannelUptimeRecord, now time.Time) []ModelUptimeHistoryBucket {
+// computeBuckets distributes records into channelUptimeBucketCount buckets,
+// each spanning (intervalMinutes+1) minutes. The rightmost bucket ends at
+// historyEnd (typically the latest probe time + 60s, capped at now), so the
+// bucket grid is anchored to probe ticks instead of wall-clock now.
+// Bucket states: 1 if any channel had success, 0 if only failures, -1 if empty.
+func computeBuckets(channelIds map[int]struct{}, records []ChannelUptimeRecord, intervalMinutes int, historyEnd int64) []ModelUptimeHistoryBucket {
 	const bucketCount = channelUptimeBucketCount
-	bucketSpan := (24 * time.Hour) / time.Duration(bucketCount)
+	bucketSpan := channelUptimeBucketSpan(intervalMinutes)
 	spanSeconds := int64(bucketSpan / time.Second)
 	if spanSeconds <= 0 {
 		spanSeconds = 1
 	}
-	bucketStart := now.Add(-24 * time.Hour).Unix()
+	bucketStart := historyEnd - int64(bucketCount)*spanSeconds
 
 	buckets := make([]ModelUptimeHistoryBucket, bucketCount)
 	for i := range buckets {
@@ -236,12 +246,12 @@ func computeBuckets(channelIds map[int]struct{}, records []ChannelUptimeRecord, 
 		if _, ok := channelIds[r.ChannelId]; !ok {
 			continue
 		}
-		idx := int((r.CreatedTime - bucketStart) / spanSeconds)
-		if idx < 0 {
-			idx = 0
+		if r.CreatedTime < bucketStart {
+			continue
 		}
-		if idx >= bucketCount {
-			idx = bucketCount - 1
+		idx := int((r.CreatedTime - bucketStart) / spanSeconds)
+		if idx < 0 || idx >= bucketCount {
+			continue
 		}
 		hasAny[idx] = true
 		buckets[idx].SampleSize++
@@ -302,10 +312,12 @@ func buildChannelSnapshots(
 // excluded entirely (typically manually-disabled channels).
 //
 // nameByID / typeByID provide channel display metadata for the snapshot field.
+// intervalMinutes drives the history strip bucket span (interval+1 min).
 func GetModelUptimeAdminViews(
 	allowedChannels map[int]struct{},
 	nameByID map[int]string,
 	typeByID map[int]int,
+	intervalMinutes int,
 ) ([]ModelUptimeAdminEntry, error) {
 	modelToChannels, err := fetchModelChannelMap(nil, allowedChannels)
 	if err != nil {
@@ -316,7 +328,14 @@ func GetModelUptimeAdminViews(
 	now := time.Now()
 	dayAgo := now.Add(-24 * time.Hour).Unix()
 
-	records, err := loadUptimeRecordsSince(allChannelIDs, dayAgo)
+	anchor, err := channelUptimeLatestRecordTime(allChannelIDs)
+	if err != nil {
+		return nil, err
+	}
+	historyEnd := channelUptimeHistoryEnd(anchor, now)
+	loadSince := computeLoadSinceUnix(historyEnd, dayAgo, intervalMinutes)
+
+	records, err := loadUptimeRecordsSince(allChannelIDs, loadSince)
 	if err != nil {
 		return nil, err
 	}
@@ -328,11 +347,11 @@ func GetModelUptimeAdminViews(
 		entries = append(entries, ModelUptimeAdminEntry{
 			Model:        modelName,
 			Status:       status,
-			Uptime24h:    computeUptime24h(channelSet, records),
+			Uptime24h:    computeUptime24h(channelSet, records, dayAgo),
 			LastCheck:    computeLastCheck(channelSet, latestPerChannel),
 			ChannelCount: len(channelSet),
 			HealthyCount: healthy,
-			History:      computeBuckets(channelSet, records, now),
+			History:      computeBuckets(channelSet, records, intervalMinutes, historyEnd),
 			Channels:     buildChannelSnapshots(channelSet, latestPerChannel, nameByID, typeByID),
 		})
 	}
@@ -346,9 +365,12 @@ func GetModelUptimeAdminViews(
 // GetModelUptimePublicViews returns the desensitised per-model rows for a
 // non-admin user. abilities are filtered to the user's groups; channels not
 // present in allowedChannels are excluded.
+//
+// intervalMinutes drives the history strip bucket span (interval+1 min).
 func GetModelUptimePublicViews(
 	allowedChannels map[int]struct{},
 	groups []string,
+	intervalMinutes int,
 ) ([]ModelUptimePublicEntry, error) {
 	if len(groups) == 0 {
 		return []ModelUptimePublicEntry{}, nil
@@ -363,7 +385,14 @@ func GetModelUptimePublicViews(
 	now := time.Now()
 	dayAgo := now.Add(-24 * time.Hour).Unix()
 
-	records, err := loadUptimeRecordsSince(allChannelIDs, dayAgo)
+	anchor, err := channelUptimeLatestRecordTime(allChannelIDs)
+	if err != nil {
+		return nil, err
+	}
+	historyEnd := channelUptimeHistoryEnd(anchor, now)
+	loadSince := computeLoadSinceUnix(historyEnd, dayAgo, intervalMinutes)
+
+	records, err := loadUptimeRecordsSince(allChannelIDs, loadSince)
 	if err != nil {
 		return nil, err
 	}
@@ -375,8 +404,8 @@ func GetModelUptimePublicViews(
 		entries = append(entries, ModelUptimePublicEntry{
 			Model:     modelName,
 			Status:    status,
-			Uptime24h: computeUptime24h(channelSet, records),
-			History:   computeBuckets(channelSet, records, now),
+			Uptime24h: computeUptime24h(channelSet, records, dayAgo),
+			History:   computeBuckets(channelSet, records, intervalMinutes, historyEnd),
 		})
 	}
 
@@ -384,6 +413,18 @@ func GetModelUptimePublicViews(
 		return sortModelStatusKeys(entries[i].Status, entries[j].Status, entries[i].Model, entries[j].Model)
 	})
 	return entries, nil
+}
+
+// computeLoadSinceUnix returns the unix timestamp that bounds the records
+// query. It picks the earlier of the uptime% cutoff (dayAgo) and the bucket
+// strip's left edge (historyEnd - historyWindow), so a single record load
+// satisfies both views even when the strip anchor is far behind now.
+func computeLoadSinceUnix(historyEnd int64, dayAgo int64, intervalMinutes int) int64 {
+	historyStart := historyEnd - int64(channelUptimeHistoryWindow(intervalMinutes)/time.Second)
+	if historyStart < dayAgo {
+		return historyStart
+	}
+	return dayAgo
 }
 
 // collectChannelIDs flattens the (model → channel set) map into a deduped int

@@ -568,7 +568,6 @@ const ModelStatusPage = () => {
             border-radius: 8px;
           }
           .model-card.status-error { background-color: var(--semi-color-danger-light-default); border-color: var(--semi-color-danger-light-active); }
-          .model-card.status-degraded { background-color: var(--semi-color-warning-light-default); border-color: var(--semi-color-warning-light-active); }
           .model-card.status-unknown { background-color: var(--semi-color-fill-0); }
 
           .model-row {

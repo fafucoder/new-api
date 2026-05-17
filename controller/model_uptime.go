@@ -48,7 +48,7 @@ func GetModelUptimeStatus(c *gin.Context) {
 	}
 
 	if role >= common.RoleAdminUser {
-		entries, err := model.GetModelUptimeAdminViews(allowed, nameByID, typeByID)
+		entries, err := model.GetModelUptimeAdminViews(allowed, nameByID, typeByID, intervalMinutes)
 		if err != nil {
 			common.ApiError(c, err)
 			return
@@ -76,7 +76,7 @@ func GetModelUptimeStatus(c *gin.Context) {
 	}
 	groups := model.SplitUserGroups(groupStr)
 
-	entries, err := model.GetModelUptimePublicViews(allowed, groups)
+	entries, err := model.GetModelUptimePublicViews(allowed, groups, intervalMinutes)
 	if err != nil {
 		common.ApiError(c, err)
 		return

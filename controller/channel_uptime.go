@@ -104,7 +104,7 @@ func GetChannelUptimeStatus(c *gin.Context) {
 		channelIdsByType[ch.Type] = append(channelIdsByType[ch.Type], ch.Id)
 	}
 
-	views, err := model.GetChannelUptimePublicViews(channelIdsByType)
+	views, err := model.GetChannelUptimePublicViews(channelIdsByType, intervalMinutes)
 	if err != nil {
 		common.ApiError(c, err)
 		return

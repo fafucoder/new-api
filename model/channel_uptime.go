@@ -16,7 +16,68 @@ const (
 	channelUptimeErrorMessageMax = 500
 	channelUptimeHistoryLimit    = 75
 	channelUptimeBucketCount     = 75
+	channelUptimeDefaultInterval = 5
 )
+
+// channelUptimeBucketSpan returns the time covered by a single cell on the
+// history strip. The +1 minute buffer aligns probe schedule with bucket
+// boundaries so each scheduled probe lands in exactly one bucket — preventing
+// the "暂无数据" gaps that appear when buckets are narrower than the probe
+// interval.
+func channelUptimeBucketSpan(intervalMinutes int) time.Duration {
+	if intervalMinutes <= 0 {
+		intervalMinutes = channelUptimeDefaultInterval
+	}
+	return time.Duration(intervalMinutes+1) * time.Minute
+}
+
+// channelUptimeHistoryWindow is the total span of the bucket strip
+// (channelUptimeBucketCount cells wide). Window stretches with the probe
+// interval — 5min → 7.5h, 30min → ~38h, 60min → ~76h.
+func channelUptimeHistoryWindow(intervalMinutes int) time.Duration {
+	return time.Duration(channelUptimeBucketCount) * channelUptimeBucketSpan(intervalMinutes)
+}
+
+// channelUptimeLatestRecordTime returns the maximum created_time across the
+// given channel ids, or 0 if no records exist. Used as the anchor for the
+// history strip so bucket boundaries align with the actual probe schedule
+// instead of drifting with the API call's wall-clock now.
+//
+// COALESCE keeps the result cross-database (SQLite/MySQL/PostgreSQL); the
+// MAX aggregation uses the channel_id + created_time composite index.
+func channelUptimeLatestRecordTime(channelIds []int) (int64, error) {
+	if len(channelIds) == 0 {
+		return 0, nil
+	}
+	var result struct {
+		MaxTs int64
+	}
+	err := DB.Model(&ChannelUptimeRecord{}).
+		Where("channel_id IN ?", channelIds).
+		Select("COALESCE(MAX(created_time), 0) AS max_ts").
+		Scan(&result).Error
+	if err != nil {
+		return 0, err
+	}
+	return result.MaxTs, nil
+}
+
+// channelUptimeHistoryEnd returns the unix timestamp where the rightmost
+// history bucket ends. Anchored to anchor + 60s (a 1-minute buffer past the
+// latest probe so the probe sits comfortably inside the rightmost bucket
+// instead of on its edge), capped at now to avoid future-dated buckets.
+// Falls back to now when no probes exist.
+func channelUptimeHistoryEnd(anchor int64, now time.Time) int64 {
+	nowUnix := now.Unix()
+	if anchor <= 0 {
+		return nowUnix
+	}
+	end := anchor + 60
+	if end > nowUnix {
+		end = nowUnix
+	}
+	return end
+}
 
 type ChannelUptimeRecord struct {
 	Id             int    `json:"id" gorm:"primaryKey"`
@@ -179,11 +240,39 @@ type ChannelUptimePublicView struct {
 // GetChannelUptimePublicViews returns one aggregated entry per channel_type
 // present in channelIds. The aggregation rules are documented in
 // docs/superpowers/specs/2026-05-13-channel-uptime-monitoring-design.md.
-func GetChannelUptimePublicViews(channelIdsByType map[int][]int) ([]ChannelUptimePublicView, error) {
+//
+// intervalMinutes is the configured probe interval; bucket span follows
+// channelUptimeBucketSpan(intervalMinutes) so each probe maps to one bucket.
+// The rightmost bucket is anchored to the most recent probe across all
+// channels in scope, eliminating drift between the strip's bucket grid and
+// the probe schedule.
+func GetChannelUptimePublicViews(channelIdsByType map[int][]int, intervalMinutes int) ([]ChannelUptimePublicView, error) {
 	now := time.Now()
+	bucketSpan := channelUptimeBucketSpan(intervalMinutes)
+	historyWindow := channelUptimeHistoryWindow(intervalMinutes)
+
+	// Uptime% retains its 24h semantics regardless of strip window.
 	dayAgo := now.Add(-24 * time.Hour).Unix()
-	bucketSpan := (24 * time.Hour) / time.Duration(channelUptimeBucketCount)
-	bucketStart := now.Add(-24 * time.Hour).Unix()
+
+	// Anchor the bucket grid to the latest probe across all channels in
+	// scope so the strip doesn't drift with each API call's `now`. One
+	// anchor for all types keeps the visual alignment consistent across
+	// rows on the same page.
+	allIds := make([]int, 0)
+	for _, ids := range channelIdsByType {
+		allIds = append(allIds, ids...)
+	}
+	anchor, err := channelUptimeLatestRecordTime(allIds)
+	if err != nil {
+		return nil, err
+	}
+	historyEnd := channelUptimeHistoryEnd(anchor, now)
+
+	spanSeconds := int64(bucketSpan / time.Second)
+	if spanSeconds <= 0 {
+		spanSeconds = 1
+	}
+	bucketStart := historyEnd - int64(historyWindow/time.Second)
 
 	results := make([]ChannelUptimePublicView, 0, len(channelIdsByType))
 
@@ -196,10 +285,6 @@ func GetChannelUptimePublicViews(channelIdsByType map[int][]int) ([]ChannelUptim
 			ChannelType: channelType,
 			Status:      "unknown",
 			History:     make([]ChannelUptimeBucketEntry, channelUptimeBucketCount),
-		}
-		spanSeconds := int64(bucketSpan / time.Second)
-		if spanSeconds <= 0 {
-			spanSeconds = 1
 		}
 		for i := range view.History {
 			view.History[i] = ChannelUptimeBucketEntry{
@@ -254,10 +339,10 @@ func GetChannelUptimePublicViews(channelIdsByType map[int][]int) ([]ChannelUptim
 			view.Uptime24h = &pct
 		}
 
-		// 10-bucket history across the last 24h.
+		// Bucket history across the strip window (75 cells of bucketSpan).
 		var bucketRecords []ChannelUptimeRecord
 		if err := DB.Select("status", "created_time").
-			Where("channel_id IN ? AND created_time >= ?", ids, dayAgo).
+			Where("channel_id IN ? AND created_time >= ?", ids, bucketStart).
 			Find(&bucketRecords).Error; err != nil {
 			return nil, err
 		}
@@ -265,12 +350,12 @@ func GetChannelUptimePublicViews(channelIdsByType map[int][]int) ([]ChannelUptim
 		bucketHasSuccess := make([]bool, channelUptimeBucketCount)
 		bucketSampleSize := make([]int, channelUptimeBucketCount)
 		for _, r := range bucketRecords {
-			idx := int((r.CreatedTime - bucketStart) / spanSeconds)
-			if idx < 0 {
-				idx = 0
+			if r.CreatedTime < bucketStart {
+				continue
 			}
-			if idx >= channelUptimeBucketCount {
-				idx = channelUptimeBucketCount - 1
+			idx := int((r.CreatedTime - bucketStart) / spanSeconds)
+			if idx < 0 || idx >= channelUptimeBucketCount {
+				continue
 			}
 			bucketHasAny[idx] = true
 			bucketSampleSize[idx]++

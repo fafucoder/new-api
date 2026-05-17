@@ -43,7 +43,7 @@ func insertUptimeRecord(t *testing.T, channelID int, status int, age time.Durati
 func TestModelUptime_NoAbilities_AdminEmpty(t *testing.T) {
 	truncateModelUptimeTables(t)
 
-	entries, err := GetModelUptimeAdminViews(map[int]struct{}{1: {}, 2: {}}, nil, nil)
+	entries, err := GetModelUptimeAdminViews(map[int]struct{}{1: {}, 2: {}}, nil, nil, 5)
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 }
@@ -51,7 +51,7 @@ func TestModelUptime_NoAbilities_AdminEmpty(t *testing.T) {
 func TestModelUptime_NoAbilities_PublicEmpty(t *testing.T) {
 	truncateModelUptimeTables(t)
 
-	entries, err := GetModelUptimePublicViews(map[int]struct{}{1: {}}, []string{"default"})
+	entries, err := GetModelUptimePublicViews(map[int]struct{}{1: {}}, []string{"default"}, 5)
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 }
@@ -64,7 +64,7 @@ func TestModelUptime_SingleSuccess_StatusNormal(t *testing.T) {
 	insertUptimeRecord(t, 100, ChannelUptimeStatusSuccess, time.Minute)
 
 	allowed := map[int]struct{}{100: {}}
-	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{100: "Azure-East"}, map[int]int{100: 8})
+	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{100: "Azure-East"}, map[int]int{100: 8}, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	e := entries[0]
@@ -99,7 +99,7 @@ func TestModelUptime_MixedChannels_StatusDegraded(t *testing.T) {
 	insertUptimeRecord(t, 2, ChannelUptimeStatusFailure, time.Minute)
 
 	allowed := map[int]struct{}{1: {}, 2: {}}
-	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{1: "A", 2: "B"}, nil)
+	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{1: "A", 2: "B"}, nil, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	e := entries[0]
@@ -119,7 +119,7 @@ func TestModelUptime_AllFailure_StatusError(t *testing.T) {
 	insertUptimeRecord(t, 11, ChannelUptimeStatusFailure, time.Minute)
 
 	allowed := map[int]struct{}{10: {}, 11: {}}
-	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{10: "X", 11: "Y"}, nil)
+	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{10: "X", 11: "Y"}, nil, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	e := entries[0]
@@ -139,7 +139,7 @@ func TestModelUptime_NoRecords_StatusUnknown(t *testing.T) {
 	// No uptime records inserted
 
 	allowed := map[int]struct{}{50: {}}
-	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{50: "Gemini"}, nil)
+	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{50: "Gemini"}, nil, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	e := entries[0]
@@ -163,7 +163,7 @@ func TestModelUptime_PublicGroupFilter(t *testing.T) {
 	insertUptimeRecord(t, 200, ChannelUptimeStatusSuccess, time.Minute)
 
 	allowed := map[int]struct{}{100: {}, 200: {}}
-	entries, err := GetModelUptimePublicViews(allowed, []string{"vip"})
+	entries, err := GetModelUptimePublicViews(allowed, []string{"vip"}, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	e := entries[0]
@@ -182,7 +182,7 @@ func TestModelUptime_PublicMultipleGroupsDedupe(t *testing.T) {
 	insertUptimeRecord(t, 300, ChannelUptimeStatusSuccess, time.Minute)
 
 	allowed := map[int]struct{}{300: {}}
-	entries, err := GetModelUptimePublicViews(allowed, []string{"ga", "gb"})
+	entries, err := GetModelUptimePublicViews(allowed, []string{"ga", "gb"}, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	e := entries[0]
@@ -206,7 +206,7 @@ func TestModelUptime_24hWindowOnly(t *testing.T) {
 	insertUptimeRecord(t, 60, ChannelUptimeStatusFailure, 1*time.Hour)
 
 	allowed := map[int]struct{}{60: {}}
-	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{60: "E"}, nil)
+	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{60: "E"}, nil, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	e := entries[0]
@@ -225,7 +225,7 @@ func TestModelUptime_DisabledAbilityExcluded(t *testing.T) {
 	insertUptimeRecord(t, 71, ChannelUptimeStatusSuccess, time.Minute)
 
 	allowed := map[int]struct{}{70: {}, 71: {}}
-	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{70: "A", 71: "B"}, nil)
+	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{70: "A", 71: "B"}, nil, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	e := entries[0]
@@ -244,7 +244,7 @@ func TestModelUptime_ManuallyDisabledChannelExcluded(t *testing.T) {
 
 	// channel 80 is "manually disabled" → not in allowedChannels
 	allowed := map[int]struct{}{81: {}}
-	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{81: "B"}, nil)
+	entries, err := GetModelUptimeAdminViews(allowed, map[int]string{81: "B"}, nil, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	e := entries[0]
@@ -262,7 +262,7 @@ func TestModelUptime_PublicViewDesensitised(t *testing.T) {
 	insertUptimeRecord(t, 90, ChannelUptimeStatusSuccess, time.Minute)
 
 	allowed := map[int]struct{}{90: {}}
-	entries, err := GetModelUptimePublicViews(allowed, []string{"default"})
+	entries, err := GetModelUptimePublicViews(allowed, []string{"default"}, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	e := entries[0]
@@ -289,7 +289,7 @@ func TestModelUptime_SortFailuresFirst(t *testing.T) {
 	// channel 3: no records → unknown
 
 	allowed := map[int]struct{}{1: {}, 2: {}, 3: {}}
-	entries, err := GetModelUptimeAdminViews(allowed, nil, nil)
+	entries, err := GetModelUptimeAdminViews(allowed, nil, nil, 5)
 	require.NoError(t, err)
 	require.Len(t, entries, 3)
 	assert.Equal(t, "alpha-error", entries[0].Model)
@@ -317,7 +317,7 @@ func TestModelUptime_PublicEmptyGroupsReturnsEmpty(t *testing.T) {
 	truncateModelUptimeTables(t)
 	insertAbility(t, "gpt-4o", 1, true, "default")
 
-	entries, err := GetModelUptimePublicViews(map[int]struct{}{1: {}}, nil)
+	entries, err := GetModelUptimePublicViews(map[int]struct{}{1: {}}, nil, 5)
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 }

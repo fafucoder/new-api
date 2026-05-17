@@ -162,7 +162,7 @@ func TestGetChannelUptimePublicViews_StatusAggregation(t *testing.T) {
 		24: {301},
 		99: {999},
 	}
-	results, err := GetChannelUptimePublicViews(mapByType)
+	results, err := GetChannelUptimePublicViews(mapByType, 5)
 	require.NoError(t, err)
 
 	byType := map[int]ChannelUptimePublicView{}
@@ -183,10 +183,11 @@ func TestGetChannelUptimePublicViews_HistoryBucketsThreeStates(t *testing.T) {
 	truncateUptimeTable(t)
 
 	now := time.Now().Unix()
-	// 75 buckets across 24h → bucket span = 86400 / 75 = 1152s
+	// 75 buckets, bucket span = (intervalMinutes+1) * 60s.
 	const bucketCount = 75
-	bucketSpan := int64(24*60*60) / int64(bucketCount)
-	bucketStart := now - 24*60*60
+	const intervalMinutes = 5
+	bucketSpan := int64((intervalMinutes + 1) * 60)
+	bucketStart := now - bucketCount*bucketSpan
 
 	// Bucket 0: success → 1
 	require.NoError(t, DB.Create(&ChannelUptimeRecord{ChannelId: 1, ChannelType: 5, Status: ChannelUptimeStatusSuccess, CreatedTime: bucketStart + 10}).Error)
@@ -194,20 +195,99 @@ func TestGetChannelUptimePublicViews_HistoryBucketsThreeStates(t *testing.T) {
 	require.NoError(t, DB.Create(&ChannelUptimeRecord{ChannelId: 1, ChannelType: 5, Status: ChannelUptimeStatusFailure, CreatedTime: bucketStart + bucketSpan + 10}).Error)
 	// Buckets 2..73: empty → -1
 	// Bucket 74: failure + success → 1 (any success wins)
-	require.NoError(t, DB.Create(&ChannelUptimeRecord{ChannelId: 1, ChannelType: 5, Status: ChannelUptimeStatusFailure, CreatedTime: bucketStart + (bucketCount-1)*bucketSpan + 100}).Error)
-	require.NoError(t, DB.Create(&ChannelUptimeRecord{ChannelId: 1, ChannelType: 5, Status: ChannelUptimeStatusSuccess, CreatedTime: bucketStart + (bucketCount-1)*bucketSpan + 200}).Error)
+	require.NoError(t, DB.Create(&ChannelUptimeRecord{ChannelId: 1, ChannelType: 5, Status: ChannelUptimeStatusFailure, CreatedTime: bucketStart + (bucketCount-1)*bucketSpan + 60}).Error)
+	require.NoError(t, DB.Create(&ChannelUptimeRecord{ChannelId: 1, ChannelType: 5, Status: ChannelUptimeStatusSuccess, CreatedTime: bucketStart + (bucketCount-1)*bucketSpan + 120}).Error)
 
-	results, err := GetChannelUptimePublicViews(map[int][]int{5: {1}})
+	results, err := GetChannelUptimePublicViews(map[int][]int{5: {1}}, intervalMinutes)
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	hist := results[0].History
 	require.Len(t, hist, bucketCount)
 	assert.Equal(t, 1, hist[0].Status)
 	assert.Greater(t, hist[0].TsEnd, hist[0].TsStart)
+	assert.Equal(t, int64(bucketSpan), hist[0].TsEnd-hist[0].TsStart, "bucket span must equal (interval+1)min")
 	assert.Equal(t, 0, hist[1].Status)
 	for i := 2; i <= bucketCount-2; i++ {
 		assert.Equal(t, -1, hist[i].Status, "bucket %d should be unknown", i)
 	}
 	assert.Equal(t, 1, hist[bucketCount-1].Status)
 	assert.Equal(t, 2, hist[bucketCount-1].SampleSize) // failure + success
+}
+
+// TestGetChannelUptimePublicViews_BucketsAnchoredToLatestProbe pins the
+// rightmost bucket to the latest probe time so the strip does not drift
+// with wall-clock now between refreshes. Three probes are inserted at
+// known offsets behind the latest one; each must land in the bucket that
+// matches its temporal distance, regardless of the test's wall-clock now.
+func TestGetChannelUptimePublicViews_BucketsAnchoredToLatestProbe(t *testing.T) {
+	truncateUptimeTable(t)
+
+	const intervalMinutes = 5
+	const bucketCount = 75
+	bucketSpan := int64((intervalMinutes + 1) * 60)
+
+	// Latest probe is 2 minutes in the past — comfortably below the 60s
+	// buffer cap so historyEnd = latestProbe + 60 (no `now` cap).
+	now := time.Now().Unix()
+	latest := now - 120
+	// Three probes spaced exactly one bucketSpan apart from `latest`,
+	// going backwards. The rightmost bucket should contain `latest`,
+	// the second-rightmost should contain `latest - bucketSpan`, etc.
+	require.NoError(t, DB.Create(&ChannelUptimeRecord{ChannelId: 1, ChannelType: 7, Status: ChannelUptimeStatusSuccess, CreatedTime: latest}).Error)
+	require.NoError(t, DB.Create(&ChannelUptimeRecord{ChannelId: 1, ChannelType: 7, Status: ChannelUptimeStatusSuccess, CreatedTime: latest - bucketSpan}).Error)
+	require.NoError(t, DB.Create(&ChannelUptimeRecord{ChannelId: 1, ChannelType: 7, Status: ChannelUptimeStatusFailure, CreatedTime: latest - 2*bucketSpan}).Error)
+
+	results, err := GetChannelUptimePublicViews(map[int][]int{7: {1}}, intervalMinutes)
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	hist := results[0].History
+	require.Len(t, hist, bucketCount)
+
+	// historyEnd = latest + 60s; rightmost bucket = [historyEnd - span, historyEnd].
+	historyEnd := latest + 60
+	assert.Equal(t, historyEnd, hist[bucketCount-1].TsEnd, "rightmost bucket TsEnd must anchor to latest probe + 60s")
+	assert.Equal(t, historyEnd-bucketSpan, hist[bucketCount-1].TsStart)
+
+	// Rightmost bucket contains `latest`.
+	assert.Equal(t, 1, hist[bucketCount-1].Status)
+	assert.Equal(t, 1, hist[bucketCount-1].SampleSize)
+	// Second-rightmost contains `latest - bucketSpan`.
+	assert.Equal(t, 1, hist[bucketCount-2].Status)
+	assert.Equal(t, 1, hist[bucketCount-2].SampleSize)
+	// Third-rightmost contains `latest - 2*bucketSpan` (failure → status 0).
+	assert.Equal(t, 0, hist[bucketCount-3].Status)
+	assert.Equal(t, 1, hist[bucketCount-3].SampleSize)
+	// Everything older is empty.
+	for i := 0; i < bucketCount-3; i++ {
+		assert.Equal(t, -1, hist[i].Status, "bucket %d should be unknown", i)
+	}
+}
+
+// TestGetChannelUptimePublicViews_RecentProbeCapsAtNow guards the
+// edge case where a probe fired in the last 60 seconds: anchor + 60
+// would otherwise create a future-dated TsEnd, which we cap at now.
+func TestGetChannelUptimePublicViews_RecentProbeCapsAtNow(t *testing.T) {
+	truncateUptimeTable(t)
+
+	const intervalMinutes = 5
+	const bucketCount = 75
+
+	// Probe 10 seconds ago. anchor + 60 = now + 50 → cap at now.
+	beforeCall := time.Now().Unix()
+	require.NoError(t, DB.Create(&ChannelUptimeRecord{ChannelId: 1, ChannelType: 7, Status: ChannelUptimeStatusSuccess, CreatedTime: beforeCall - 10}).Error)
+
+	results, err := GetChannelUptimePublicViews(map[int][]int{7: {1}}, intervalMinutes)
+	require.NoError(t, err)
+	afterCall := time.Now().Unix()
+
+	require.Len(t, results, 1)
+	hist := results[0].History
+	require.Len(t, hist, bucketCount)
+	// TsEnd of the rightmost bucket must not exceed the wall-clock now
+	// captured inside GetChannelUptimePublicViews. We can't observe that
+	// exact value, but it's bounded by [beforeCall, afterCall].
+	assert.LessOrEqual(t, hist[bucketCount-1].TsEnd, afterCall, "TsEnd must be capped at now")
+	assert.GreaterOrEqual(t, hist[bucketCount-1].TsEnd, beforeCall, "TsEnd should be at or after the API call's now")
+	// And the latest probe still lands in the rightmost bucket.
+	assert.Equal(t, 1, hist[bucketCount-1].Status)
 }
