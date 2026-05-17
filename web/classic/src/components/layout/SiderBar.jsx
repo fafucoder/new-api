@@ -53,6 +53,7 @@ const routerMap = {
   status: '/console/status',
   modelStatus: '/console/model-status',
   cacheHitStats: '/console/cache-hit-stats',
+  channelValidation: '/console/channel-validation',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
@@ -118,6 +119,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('模型状态'),
         itemKey: 'modelStatus',
         to: '/console/model-status',
+      },
+      {
+        text: t('模型检测'),
+        itemKey: 'channelValidation',
+        to: '/console/channel-validation',
       },
     ];
 

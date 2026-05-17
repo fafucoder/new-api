@@ -40,6 +40,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     task: true,
     status: true,
     modelStatus: true,
+    channelValidation: true,
   },
   personal: {
     enabled: true,

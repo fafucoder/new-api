@@ -187,6 +187,16 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			modelUptimeRoute.GET("/status", controller.GetModelUptimeStatus)
 		}
+		channelValidationRoute := apiRouter.Group("/channel-validation")
+		channelValidationRoute.Use(middleware.UserAuth())
+		{
+			channelValidationRoute.GET("/models", controller.GetChannelValidationModels)
+			channelValidationRoute.POST("/run", controller.PostChannelValidationRun)
+			channelValidationRoute.GET("/records", controller.GetChannelValidationRecords)
+			channelValidationRoute.GET("/records/:id", controller.GetChannelValidationRecordDetail)
+			channelValidationRoute.DELETE("/records/:id", controller.DeleteChannelValidationRecordHandler)
+			channelValidationRoute.GET("/channels/:id/models", middleware.AdminAuth(), controller.GetChannelValidationChannelModels)
+		}
 		optionRoute := apiRouter.Group("/option")
 		optionRoute.Use(middleware.RootAuth())
 		{

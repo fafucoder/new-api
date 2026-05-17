@@ -54,6 +54,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       task: true,
       status: true,
       modelStatus: true,
+      channelValidation: true,
     },
     personal: {
       enabled: true,
@@ -118,6 +119,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         task: true,
         status: true,
         modelStatus: true,
+        channelValidation: true,
       },
       personal: {
         enabled: true,
@@ -187,6 +189,9 @@ export default function SettingsSidebarModulesAdmin(props) {
         if (modules.console && modules.console.modelStatus === undefined) {
           modules.console.modelStatus = true;
         }
+        if (modules.console && modules.console.channelValidation === undefined) {
+          modules.console.channelValidation = true;
+        }
         if (modules.admin && modules.admin.cacheHitStats === undefined) {
           modules.admin.cacheHitStats = true;
         }
@@ -204,6 +209,7 @@ export default function SettingsSidebarModulesAdmin(props) {
             task: true,
             status: true,
             modelStatus: true,
+            channelValidation: true,
           },
           personal: { enabled: true, topup: true, personal: true },
           admin: {
@@ -254,6 +260,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
         { key: 'status', title: t('服务状态'), description: t('服务状态监控') },
         { key: 'modelStatus', title: t('模型状态'), description: t('模型可用性监控') },
+        { key: 'channelValidation', title: t('模型检测'), description: t('Claude 模型真伪检测') },
       ],
     },
     {

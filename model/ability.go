@@ -52,6 +52,55 @@ func GetEnabledModels() []string {
 	return models
 }
 
+// FindEnabledChannelForModelByType returns the channel id with the highest
+// (priority, weight) tuple serving `modelName` for any of the given user
+// groups, restricted to channels of the given type. Returns 0 when no
+// qualifying ability exists. Used by the validation flow to map a
+// user-selected model to a backing channel of a specific type
+// (Anthropic-direct = 14) without exposing channel identity to the user.
+func FindEnabledChannelForModelByType(modelName string, groups []string, channelType int) (int, error) {
+	if modelName == "" || len(groups) == 0 || channelType == 0 {
+		return 0, nil
+	}
+	var channelID int
+	err := DB.Table("abilities").
+		Joins("JOIN channels ON channels.id = abilities.channel_id").
+		Where("channels.type = ? AND abilities.model = ? AND abilities.enabled = ?", channelType, modelName, true).
+		Where("abilities."+commonGroupCol+" IN ?", groups).
+		Where("channels.status = ?", common.ChannelStatusEnabled).
+		Order("abilities.priority DESC, abilities.weight DESC").
+		Limit(1).
+		Pluck("abilities.channel_id", &channelID).Error
+	if err != nil {
+		return 0, err
+	}
+	return channelID, nil
+}
+
+// ListClaudeModelsForGroups returns the distinct list of model names
+// served by enabled Anthropic-direct channels (type=14). When `all` is
+// true (admin caller), `groups` is ignored and every Claude model in the
+// abilities table is returned; otherwise the result is restricted to the
+// caller's groups.
+func ListClaudeModelsForGroups(groups []string, all bool) ([]string, error) {
+	var models []string
+	q := DB.Table("abilities").
+		Select("DISTINCT abilities.model").
+		Joins("JOIN channels ON channels.id = abilities.channel_id").
+		Where("channels.type = ? AND abilities.enabled = ?", 14, true).
+		Where("channels.status = ?", common.ChannelStatusEnabled)
+	if !all {
+		if len(groups) == 0 {
+			return []string{}, nil
+		}
+		q = q.Where("abilities."+commonGroupCol+" IN ?", groups)
+	}
+	if err := q.Order("abilities.model ASC").Pluck("model", &models).Error; err != nil {
+		return nil, err
+	}
+	return models, nil
+}
+
 func GetAllEnableAbilities() []Ability {
 	var abilities []Ability
 	DB.Find(&abilities, "enabled = ?", true)

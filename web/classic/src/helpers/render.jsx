@@ -82,6 +82,7 @@ import {
   CalendarClock,
   Activity,
   Boxes,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -158,6 +159,8 @@ export function getLucideIcon(key, selected = false) {
       return <Activity {...commonProps} color={iconColor} />;
     case 'modelStatus':
       return <Boxes {...commonProps} color={iconColor} />;
+    case 'channelValidation':
+      return <ShieldCheck {...commonProps} color={iconColor} />;
     case 'cacheHitStats':
       return <BarChart3 {...commonProps} color={iconColor} />;
     default:
