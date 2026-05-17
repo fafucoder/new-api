@@ -25,6 +25,7 @@ import {
   Modal,
   Space,
   SplitButtonGroup,
+  Switch,
   Tag,
   Tooltip,
   Typography,
@@ -680,6 +681,46 @@ export const getChannelsColumns = ({
             />
           );
         }
+      },
+    },
+    {
+      key: COLUMN_KEYS.DISABLE_PROBE,
+      title: t('禁用探测'),
+      dataIndex: 'setting',
+      render: (text, record) => {
+        if (record.children !== undefined) {
+          return null;
+        }
+        let parsed = {};
+        if (record.setting) {
+          try {
+            parsed = JSON.parse(record.setting);
+          } catch {
+            parsed = {};
+          }
+        }
+        const checked = !!parsed.disable_probe;
+        return (
+          <Tooltip
+            content={t(
+              '开启后,批量"测试所有通道"和定时可用性探测将跳过此渠道',
+            )}
+          >
+            <Switch
+              size='small'
+              checked={checked}
+              onChange={(v) => {
+                const next = { ...parsed, disable_probe: v };
+                manageChannel(
+                  record.id,
+                  'set_setting',
+                  record,
+                  JSON.stringify(next),
+                );
+              }}
+            />
+          </Tooltip>
+        );
       },
     },
     {

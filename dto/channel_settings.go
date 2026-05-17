@@ -7,6 +7,7 @@ type ChannelSettings struct {
 	PassThroughBodyEnabled bool   `json:"pass_through_body_enabled,omitempty"`
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
+	DisableProbe           bool   `json:"disable_probe,omitempty"` // 跳过批量探测/可用性测试
 }
 
 type VertexKeyType string

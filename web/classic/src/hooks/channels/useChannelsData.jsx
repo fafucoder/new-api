@@ -140,6 +140,7 @@ export const useChannelsData = () => {
     BALANCE: 'balance',
     PRIORITY: 'priority',
     WEIGHT: 'weight',
+    DISABLE_PROBE: 'disable_probe',
     OPERATE: 'operate',
   };
 
@@ -180,6 +181,7 @@ export const useChannelsData = () => {
       [COLUMN_KEYS.BALANCE]: true,
       [COLUMN_KEYS.PRIORITY]: true,
       [COLUMN_KEYS.WEIGHT]: true,
+      [COLUMN_KEYS.DISABLE_PROBE]: true,
       [COLUMN_KEYS.OPERATE]: true,
     };
   };
@@ -471,6 +473,10 @@ export const useChannelsData = () => {
         data.channel_info.multi_key_status_list = {};
         res = await API.put('/api/channel/', data);
         break;
+      case 'set_setting':
+        data.setting = value;
+        res = await API.put('/api/channel/', data);
+        break;
     }
     const { success, message } = res.data;
     if (success) {
@@ -479,6 +485,9 @@ export const useChannelsData = () => {
       let newChannels = [...channels];
       if (action !== 'delete') {
         record.status = channel.status;
+      }
+      if (action === 'set_setting') {
+        record.setting = value;
       }
       setChannels(newChannels);
     } else {
