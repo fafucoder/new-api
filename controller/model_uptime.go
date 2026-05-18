@@ -26,13 +26,17 @@ func GetModelUptimeStatus(c *gin.Context) {
 	}
 
 	// allowedChannels excludes manually-disabled channels, mirroring
-	// testAllChannels behaviour. nameByID / typeByID populate the admin view's
-	// per-channel snapshot.
+	// testAllChannels behaviour. Channels whose setting marks DisableProbe=true
+	// are also excluded so they don't appear in per-model strip aggregations.
+	// nameByID / typeByID populate the admin view's per-channel snapshot.
 	allowed := make(map[int]struct{}, len(channels))
 	nameByID := make(map[int]string, len(channels))
 	typeByID := make(map[int]int, len(channels))
 	for _, ch := range channels {
 		if ch == nil || ch.Status == common.ChannelStatusManuallyDisabled {
+			continue
+		}
+		if ch.GetSetting().DisableProbe {
 			continue
 		}
 		allowed[ch.Id] = struct{}{}

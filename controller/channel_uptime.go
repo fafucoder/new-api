@@ -25,10 +25,15 @@ func GetChannelUptimeStatus(c *gin.Context) {
 	}
 
 	// Filter out manually disabled channels — they are intentionally excluded
-	// from monitoring (consistent with testAllChannels behaviour).
+	// from monitoring (consistent with testAllChannels behaviour). Channels
+	// whose setting marks DisableProbe=true are also excluded so they don't
+	// pollute the status strip with stale "unknown" cells.
 	active := make([]*model.Channel, 0, len(channels))
 	for _, ch := range channels {
 		if ch == nil || ch.Status == common.ChannelStatusManuallyDisabled {
+			continue
+		}
+		if ch.GetSetting().DisableProbe {
 			continue
 		}
 		active = append(active, ch)
