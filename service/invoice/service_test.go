@@ -261,3 +261,54 @@ func TestIssue_ProviderFailureRollsBack(t *testing.T) {
 		t.Fatalf("error not recorded in provider_raw: %q", got.ProviderRaw)
 	}
 }
+
+func TestReject_OK(t *testing.T) {
+	setupInvoiceServiceDB(t)
+	inv := seedPendingInvoice(t, 1, 100, "stub")
+	if err := Reject(inv.Id, 9, "duplicate request"); err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+	got, _ := model.GetInvoice(inv.Id)
+	if got.Status != model.InvoiceStatusRejected {
+		t.Fatalf("status = %q, want rejected", got.Status)
+	}
+	if got.RejectReason != "duplicate request" {
+		t.Fatalf("reason = %q", got.RejectReason)
+	}
+	if got.ReviewerID != 9 {
+		t.Fatalf("reviewer = %v", got.ReviewerID)
+	}
+}
+
+func TestReject_WrongStatus(t *testing.T) {
+	setupInvoiceServiceDB(t)
+	inv := seedPendingInvoice(t, 1, 100, "stub")
+	model.DB.Model(&model.Invoice{}).Where("id=?", inv.Id).
+		Update("status", model.InvoiceStatusIssued)
+	if err := Reject(inv.Id, 9, "x"); err != ErrInvalidStatus {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestSummary(t *testing.T) {
+	setupInvoiceServiceDB(t)
+	s := operation_setting.GetInvoiceSetting()
+	prev := *s
+	defer func() { *s = prev }()
+	s.Enabled = true
+	s.MinimumAmount = 50
+
+	seedTopUp(t, 1, 1000, "tinv-sum-1")
+	seedPendingInvoice(t, 1, 400, "stub")
+
+	got, err := Summary(1)
+	if err != nil {
+		t.Fatalf("summary: %v", err)
+	}
+	if got.TopupTotal != 1000 || got.InvoicedTotal != 400 || got.Billable != 600 {
+		t.Fatalf("got %+v", got)
+	}
+	if got.MinimumAmount != 50 || !got.Enabled {
+		t.Fatalf("setting flags wrong: %+v", got)
+	}
+}

@@ -241,3 +241,67 @@ func rollback(invoiceID int, reason string) {
 func sendInvoiceIssuedEmail(inv *model.Invoice, result *IssueResult) error {
 	return nil
 }
+
+// Reject 把 pending 申请标记为 rejected, 写 reason 和处理人。
+// issuing / issued 不允许 reject(避免覆盖已经请求的开票)。
+func Reject(invoiceID int, reviewerID int, reason string) error {
+	if reviewerID <= 0 {
+		return ErrInvalidForm
+	}
+	ok, err := model.TransitionInvoiceStatus(invoiceID,
+		model.InvoiceStatusPending, model.InvoiceStatusRejected,
+		map[string]any{
+			"reject_reason": reason,
+			"reviewer_id":   reviewerID,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrInvalidStatus
+	}
+	return nil
+}
+
+// SummaryView 给前端余额卡 + 申请按钮做决策。
+type SummaryView struct {
+	Enabled             bool    `json:"enabled"`
+	RequireManualReview bool    `json:"require_manual_review"`
+	MinimumAmount       float64 `json:"minimum_amount"`
+	TopupTotal          float64 `json:"topup_total"`
+	InvoicedTotal       float64 `json:"invoiced_total"`
+	Billable            float64 `json:"billable"`
+	HasInFlight         bool    `json:"has_in_flight"`
+}
+
+// Summary 拼一个面板数据。Enabled=false 时仍允许返回(前端用于
+// 给申请按钮加 tooltip), 但 controller 应另外拒绝实际 Apply。
+func Summary(userID int) (*SummaryView, error) {
+	setting := operation_setting.GetInvoiceSetting()
+	out := &SummaryView{
+		Enabled:             setting.Enabled,
+		RequireManualReview: setting.RequireManualReview,
+		MinimumAmount:       setting.MinimumAmount,
+	}
+	if userID <= 0 {
+		return out, nil
+	}
+	topup, err := model.SumTopUpSuccessMoney(userID)
+	if err != nil {
+		return nil, err
+	}
+	invoiced, err := model.SumInvoicedAmount(userID)
+	if err != nil {
+		return nil, err
+	}
+	inFlight, err := model.HasInFlightInvoice(userID)
+	if err != nil {
+		return nil, err
+	}
+	out.TopupTotal = topup
+	out.InvoicedTotal = invoiced
+	out.Billable = topup - invoiced
+	out.HasInFlight = inFlight
+	return out, nil
+}
