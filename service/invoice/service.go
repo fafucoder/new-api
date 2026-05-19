@@ -142,8 +142,18 @@ func Issue(invoiceID int, reviewerID int) error {
 		return ErrInvalidStatus
 	}
 
-	// reload to pick up the latest Provider field after transition
-	inv, _ = model.GetInvoice(invoiceID)
+	// reload 拿到 issuing 后的最新 Provider 字段。极小概率重读失败
+	// (比如 admin 同时把这条 invoice 删了), 防御一下 nil deref。
+	reloaded, err := model.GetInvoice(invoiceID)
+	if err != nil {
+		rollback(invoiceID, fmt.Sprintf("reload failed: %s", err.Error()))
+		return err
+	}
+	if reloaded == nil {
+		rollback(invoiceID, "invoice gone after transition")
+		return ErrInvoiceNotFound
+	}
+	inv = reloaded
 	providerName := inv.Provider
 	if providerName == "" {
 		providerName = operation_setting.GetInvoiceSetting().Provider
@@ -208,10 +218,18 @@ func safeIssue(p InvoiceProvider, req *IssueRequest) (result *IssueResult, err e
 // rollback 把 issuing 状态退回 pending, 错误写到 provider_raw。
 // 用单条 UPDATE 完成, 不抛错(避免吞掉原始 issue 错误)。
 func rollback(invoiceID int, reason string) {
-	raw := fmt.Sprintf(`{"error":%q,"at":%d}`, reason, common.GetTimestamp())
-	_, err := model.TransitionInvoiceStatus(invoiceID,
+	payload := map[string]any{
+		"error": reason,
+		"at":    common.GetTimestamp(),
+	}
+	rawBytes, err := common.Marshal(payload)
+	if err != nil {
+		// 极端情况:序列化失败回退到纯字符串, 不阻塞回滚动作
+		rawBytes = []byte(fmt.Sprintf(`{"error":%q}`, reason))
+	}
+	_, err = model.TransitionInvoiceStatus(invoiceID,
 		model.InvoiceStatusIssuing, model.InvoiceStatusPending,
-		map[string]any{"provider_raw": raw},
+		map[string]any{"provider_raw": string(rawBytes)},
 	)
 	if err != nil {
 		common.SysError(fmt.Sprintf("invoice rollback failed: invoice=%d err=%v",
