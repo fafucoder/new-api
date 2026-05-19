@@ -83,6 +83,8 @@ import {
   Activity,
   Boxes,
   ShieldCheck,
+  Wallet,
+  FileText,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -163,6 +165,11 @@ export function getLucideIcon(key, selected = false) {
       return <ShieldCheck {...commonProps} color={iconColor} />;
     case 'cacheHitStats':
       return <BarChart3 {...commonProps} color={iconColor} />;
+    case 'balanceAlert':
+      return <Wallet {...commonProps} color={iconColor} />;
+    case 'invoice':
+    case 'invoiceAdmin':
+      return <FileText {...commonProps} color={iconColor} />;
     default:
       return <CircleUser {...commonProps} color={iconColor} />;
   }

@@ -197,6 +197,16 @@ func SetApiRouter(router *gin.Engine) {
 			channelValidationRoute.DELETE("/records/:id", controller.DeleteChannelValidationRecordHandler)
 			channelValidationRoute.GET("/channels/:id/models", middleware.AdminAuth(), controller.GetChannelValidationChannelModels)
 		}
+		balanceAlertRoute := apiRouter.Group("/balance-alert")
+		balanceAlertRoute.Use(middleware.AdminAuth())
+		{
+			balanceAlertRoute.GET("/rules", controller.GetBalanceAlertRules)
+			balanceAlertRoute.POST("/rules", controller.PostBalanceAlertRule)
+			balanceAlertRoute.PUT("/rules/:id", controller.PutBalanceAlertRule)
+			balanceAlertRoute.DELETE("/rules/:id", controller.DeleteBalanceAlertRuleHandler)
+			balanceAlertRoute.GET("/tags", controller.GetBalanceAlertTags)
+			balanceAlertRoute.POST("/rules/:id/test", controller.PostBalanceAlertRuleTest)
+		}
 		invoiceRoute := apiRouter.Group("/invoice")
 		invoiceRoute.Use(middleware.UserAuth())
 		{

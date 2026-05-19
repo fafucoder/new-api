@@ -34,6 +34,9 @@ import {
 } from '@douyinfe/semi-ui';
 import { FileText, Plus, RefreshCw } from 'lucide-react';
 import { API, showError, showSuccess } from '../../helpers';
+import CardTable from '../../components/common/ui/CardTable';
+import CompactModeToggle from '../../components/common/ui/CompactModeToggle';
+import { useTableCompactMode } from '../../hooks/common/useTableCompactMode';
 
 const { Title, Text } = Typography;
 
@@ -76,6 +79,7 @@ const INVOICE_TYPE_MAP = {
 
 const InvoicePage = () => {
   const { t } = useTranslation();
+  const [compactMode, setCompactMode] = useTableCompactMode('invoices');
   const [summary, setSummary] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -261,20 +265,25 @@ const InvoicePage = () => {
   ];
 
   return (
-    <div
-      className='mt-[60px] px-2 invoice-page'
-      style={{ width: '100%', overflow: 'hidden', boxSizing: 'border-box' }}
-    >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, marginBottom: 20 }}>
-        <div style={{ flex: 1 }}>
-          <Title heading={2} style={{ marginBottom: 8 }}>
-            <FileText size={20} style={{ verticalAlign: '-3px', marginRight: 6 }} />
-            {t('发票管理')}
-          </Title>
-          <Text type='secondary' style={{ fontSize: 13 }}>
+    <div className='mt-[60px] px-2'>
+      <div className='invoice-page'>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, marginBottom: 20 }}>
+          <div style={{ flex: 1 }}>
+            <Title heading={2} style={{ marginBottom: 8 }}>
+              <FileText size={20} style={{ verticalAlign: '-3px', marginRight: 6 }} />
+              {t('发票管理')}
+            </Title>
+            <Text type='secondary' style={{ fontSize: 13 }}>
             {t('申请开具增值税普通发票或专用发票')}
           </Text>
         </div>
+        <Button
+          icon={<RefreshCw size={14} />}
+          onClick={() => { loadSummary(); loadInvoices(); }}
+          loading={loading}
+        >
+          {t('立即刷新')}
+        </Button>
       </div>
 
       {summary && (
@@ -310,35 +319,36 @@ const InvoicePage = () => {
                 </Button>
               </span>
             </Tooltip>
-            <Button
-              icon={<RefreshCw size={14} />}
-              theme='borderless'
-              onClick={() => { loadSummary(); loadInvoices(); }}
-            >
-              {t('刷新')}
-            </Button>
           </div>
         </Card>
       )}
 
       <Card bordered>
-        <Text strong style={{ marginBottom: 12, display: 'block' }}>
-          {t('申请记录')}
-          <Text type='tertiary' size='small' style={{ marginLeft: 8 }}>
-            ({total})
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text strong>
+            {t('申请记录')}
+            <Text type='tertiary' size='small' style={{ marginLeft: 8 }}>
+              ({total})
+            </Text>
           </Text>
-        </Text>
-        <Table
+          <CompactModeToggle
+            compactMode={compactMode}
+            setCompactMode={setCompactMode}
+            t={t}
+          />
+        </div>
+        <CardTable
           columns={columns}
           dataSource={invoices}
           rowKey='id'
           pagination={{
-            current: page,
-            pageSize,
-            total,
-            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+            currentPage: page,
+            pageSize: pageSize,
+            total: total,
             showSizeChanger: true,
-            showTotal: (tot) => t('共 {{total}} 条', { total: tot }),
+            pageSizeOptions: [10, 20, 50, 100],
+            onPageSizeChange: (size) => { setPageSize(size); },
+            onPageChange: (p) => { setPage(p); },
           }}
           loading={loading}
           empty={
@@ -348,7 +358,7 @@ const InvoicePage = () => {
               description={t('点击上方"申请开票"开始')}
             />
           }
-          scroll={{ x: 1200 }}
+          scroll={compactMode ? undefined : { x: 1200 }}
         />
       </Card>
 
@@ -422,6 +432,11 @@ const InvoicePage = () => {
           </Form.Slot>
         </Form>
       </Modal>
+
+      <style>{`
+        .invoice-page { padding: 24px; }
+      `}</style>
+      </div>
     </div>
   );
 };

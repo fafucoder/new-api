@@ -54,6 +54,9 @@ const routerMap = {
   modelStatus: '/console/model-status',
   cacheHitStats: '/console/cache-hit-stats',
   channelValidation: '/console/channel-validation',
+  balanceAlert: '/console/balanceAlert',
+  invoice: '/invoice',
+  invoiceAdmin: '/invoice-admin',
 };
 
 const SiderBar = ({ onNavigate = () => {} }) => {
@@ -150,6 +153,11 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         to: '/topup',
       },
       {
+        text: t('发票管理'),
+        itemKey: 'invoice',
+        to: '/invoice',
+      },
+      {
         text: t('个人设置'),
         itemKey: 'personal',
         to: '/personal',
@@ -193,9 +201,21 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {
-        text: t('缓存管理'),
+        text: t('缓存监控'),
         itemKey: 'cacheHitStats',
         to: '/console/cache-hit-stats',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('余额监控'),
+        itemKey: 'balanceAlert',
+        to: '/console/balanceAlert',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('发票审核'),
+        itemKey: 'invoiceAdmin',
+        to: '/invoice-admin',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {

@@ -28,6 +28,7 @@ import SettingsMonitoring from '../../pages/Setting/Operation/SettingsMonitoring
 import SettingsCreditLimit from '../../pages/Setting/Operation/SettingsCreditLimit';
 import SettingsCheckin from '../../pages/Setting/Operation/SettingsCheckin';
 import SettingsInvoice from '../../pages/Setting/Operation/SettingsInvoice';
+import SettingsBalanceAlert from '../../pages/Setting/Operation/SettingsBalanceAlert';
 import { API, showError, toBoolean } from '../../helpers';
 
 const OperationSetting = () => {
@@ -79,6 +80,11 @@ const OperationSetting = () => {
     'checkin_setting.enabled': false,
     'checkin_setting.min_quota': 1000,
     'checkin_setting.max_quota': 10000,
+
+    /* 余额监控告警 */
+    'monitor_setting.auto_balance_alert_enabled': false,
+    'monitor_setting.auto_balance_alert_minutes': 30,
+    'monitor_setting.balance_alert_cooldown_hours': 6,
 
     /* 令牌设置 */
     'token_setting.max_user_tokens': 1000,
@@ -152,6 +158,10 @@ const OperationSetting = () => {
         {/* 监控设置 */}
         <Card style={{ marginTop: '10px' }}>
           <SettingsMonitoring options={inputs} refresh={onRefresh} />
+        </Card>
+        {/* 余额监控告警设置 */}
+        <Card style={{ marginTop: '10px' }}>
+          <SettingsBalanceAlert options={inputs} refresh={onRefresh} />
         </Card>
         {/* 额度设置 */}
         <Card style={{ marginTop: '10px' }}>

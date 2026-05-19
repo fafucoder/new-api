@@ -353,26 +353,24 @@ const ChannelValidationPage = () => {
   };
 
   return (
-    <div
-      className='mt-[60px] px-2 channel-validation-page'
-      style={{ width: '100%', overflow: 'hidden', boxSizing: 'border-box' }}
-    >
-      <div className='cv-header'>
-        <div className='cv-header-left'>
-          <Title heading={2} className='cv-title'>
-            <ShieldCheck
-              size={20}
-              style={{ verticalAlign: '-3px', marginRight: 6 }}
-            />
-            {t('模型检测')}
-          </Title>
-          <Text type='secondary' className='cv-subtitle'>
-            {t(
-              '通过 3 步探测(基线 / 多轮签名重放 / 签名篡改负测)判断上游是否真的是 Claude — 检测"挂羊头卖狗肉"代理。',
-            )}
-          </Text>
+    <div className='mt-[60px] px-2'>
+      <div className='channel-validation-page'>
+        <div className='cv-header'>
+          <div className='cv-header-left'>
+            <Title heading={2} className='cv-title'>
+              <ShieldCheck
+                size={20}
+                style={{ verticalAlign: '-3px', marginRight: 6 }}
+              />
+              {t('模型检测')}
+            </Title>
+            <Text type='secondary' className='cv-subtitle'>
+              {t(
+                '通过 3 步探测(基线 / 多轮签名重放 / 签名篡改负测)判断上游是否真的是 Claude — 检测"挂羊头卖狗肉"代理。',
+              )}
+            </Text>
+          </div>
         </div>
-      </div>
 
       <Card className='cv-form-card' bordered>
         <Form labelPosition='top'>
@@ -550,12 +548,14 @@ const ChannelValidationPage = () => {
       </div>
 
       <style>{`
+        .channel-validation-page { padding: 24px; }
+
         .cv-header {
           display: flex;
           align-items: flex-start;
           justify-content: space-between;
           gap: 24px;
-          margin-bottom: 20px;
+          margin-bottom: 16px;
         }
         .cv-header-left { flex: 1; min-width: 0; }
         .cv-title { margin-bottom: 8px !important; }
@@ -607,6 +607,7 @@ const ChannelValidationPage = () => {
         .cv-step-card { border: 1px solid var(--semi-color-border); border-radius: 8px; margin-bottom: 8px; }
         .cv-raw-pre { white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow-y: auto; background: var(--semi-color-fill-0); padding: 8px; border-radius: 6px; font-size: 11px; font-family: ui-monospace, SFMono-Regular, monospace; }
       `}</style>
+      </div>
     </div>
   );
 };

@@ -1030,7 +1030,7 @@
     "缓存读取价格 {{symbol}}{{price}} / 1M tokens": "Cache read price {{symbol}}{{price}} / 1M tokens",
     "缓存读取价格：{{symbol}}{{price}} / 1M tokens": "Cache read price: {{symbol}}{{price}} / 1M tokens",
     "缓存读取价格：{{symbol}}{{total}} / 1M tokens": "Cache read price: {{symbol}}{{total}} / 1M tokens",
-    "缓存管理": "Cache Management",
+    "缓存管理": "Cache Monitoring",
     "缓存价格：{{symbol}}{{price}} * {{cacheRatio}} = {{symbol}}{{total}} / 1M tokens (缓存倍率: {{cacheRatio}})": "Cache price: {{symbol}}{{price}} * {{cacheRatio}} = {{symbol}}{{total}} / 1M tokens (Cache ratio: {{cacheRatio}})",
     "缓存价格：{{symbol}}{{price}} * {{ratio}} = {{symbol}}{{total}} / 1M tokens (缓存倍率: {{cacheRatio}})": "Cache price: {{symbol}}{{price}} * {{ratio}} = {{symbol}}{{total}} / 1M tokens (Cache ratio: {{cacheRatio}})",
     "缓存命中率": "Cache Hit Rate",

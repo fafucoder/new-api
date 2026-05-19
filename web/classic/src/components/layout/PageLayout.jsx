@@ -65,12 +65,16 @@ const PageLayout = () => {
   const shouldHideFooter = cardProPages.includes(location.pathname);
 
   const shouldInnerPadding =
-    location.pathname.includes('/console') &&
+    (location.pathname.includes('/console') || 
+     location.pathname.startsWith('/invoice') || 
+     location.pathname.startsWith('/invoice-admin')) &&
     !location.pathname.startsWith('/console/chat') &&
     location.pathname !== '/console/playground';
 
-  const isConsoleRoute = location.pathname.startsWith('/console');
-  const showSider = isConsoleRoute && (!isMobile || drawerOpen);
+  const isConsoleRoute = location.pathname.startsWith('/console') || 
+      location.pathname.startsWith('/invoice') || 
+      location.pathname.startsWith('/invoice-admin');
+    const showSider = isConsoleRoute && (!isMobile || drawerOpen);
 
   useEffect(() => {
     if (isMobile && drawerOpen && collapsed) {

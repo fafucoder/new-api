@@ -1044,7 +1044,7 @@
     "缓存读取价格 {{symbol}}{{price}} / 1M tokens": "Цена чтения кеша {{symbol}}{{price}} / 1M tokens",
     "缓存读取价格：{{symbol}}{{price}} / 1M tokens": "Цена чтения кеша: {{symbol}}{{price}} / 1M tokens",
     "缓存读取价格：{{symbol}}{{total}} / 1M tokens": "Цена чтения кеша: {{symbol}}{{total}} / 1M tokens",
-    "缓存管理": "Управление кэшем",
+    "缓存管理": "Мониторинг кэша",
     "缓存价格：{{symbol}}{{price}} * {{cacheRatio}} = {{symbol}}{{total}} / 1M tokens (缓存倍率: {{cacheRatio}})": "Цена кэша: {{symbol}}{{price}} * {{cacheRatio}} = {{symbol}}{{total}} / 1M токенов (коэффициент кэширования: {{cacheRatio}})",
     "缓存价格：{{symbol}}{{price}} * {{ratio}} = {{symbol}}{{total}} / 1M tokens (缓存倍率: {{cacheRatio}})": "Цена кэша: {{symbol}}{{price}} * {{ratio}} = {{symbol}}{{total}} / 1M токенов (коэффициент кэширования: {{cacheRatio}})",
     "缓存命中率": "Процент попаданий в кэш",

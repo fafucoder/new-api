@@ -1124,7 +1124,7 @@
     "缓存读取价格 {{symbol}}{{price}} / 1M tokens": "Giá đọc bộ nhớ đệm {{symbol}}{{price}} / 1M tokens",
     "缓存读取价格：{{symbol}}{{price}} / 1M tokens": "Giá đọc bộ nhớ đệm: {{symbol}}{{price}} / 1M tokens",
     "缓存读取价格：{{symbol}}{{total}} / 1M tokens": "Giá đọc bộ nhớ đệm: {{symbol}}{{total}} / 1M tokens",
-    "缓存管理": "Quản lý cache",
+    "缓存管理": "Giám sát cache",
     "缓存价格：{{symbol}}{{price}} * {{cacheRatio}} = {{symbol}}{{total}} / 1M tokens (缓存倍率: {{cacheRatio}})": "Giá bộ nhớ đệm: {{symbol}}{{price}} * {{cacheRatio}} = {{symbol}}{{total}} / 1M tokens (Tỷ lệ bộ nhớ đệm: {{cacheRatio}})",
     "缓存价格：{{symbol}}{{price}} * {{ratio}} = {{symbol}}{{total}} / 1M tokens (缓存倍率: {{cacheRatio}})": "Giá bộ nhớ đệm: {{symbol}}{{price}} * {{ratio}} = {{symbol}}{{total}} / 1M tokens (Tỷ lệ bộ nhớ đệm: {{cacheRatio}})",
     "缓存命中率": "Tỷ lệ cache hit",

@@ -32,6 +32,9 @@ import {
 } from '@douyinfe/semi-ui';
 import { FileText, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
 import { API, showError, showSuccess } from '../../helpers';
+import CardTable from '../../components/common/ui/CardTable';
+import CompactModeToggle from '../../components/common/ui/CompactModeToggle';
+import { useTableCompactMode } from '../../hooks/common/useTableCompactMode';
 
 const { Title, Text } = Typography;
 
@@ -74,6 +77,7 @@ const INVOICE_TYPE_MAP = {
 
 const InvoiceAdminPage = () => {
   const { t } = useTranslation();
+  const [compactMode, setCompactMode] = useTableCompactMode('invoiceAdmin');
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -298,6 +302,13 @@ const InvoiceAdminPage = () => {
             {t('审核用户发票申请并进行开具或拒绝操作')}
           </Text>
         </div>
+        <Button
+          icon={<RefreshCw size={14} />}
+          onClick={() => loadInvoices()}
+          loading={loading}
+        >
+          {t('立即刷新')}
+        </Button>
       </div>
 
       <Card bordered style={{ marginBottom: 16 }}>
@@ -326,35 +337,35 @@ const InvoiceAdminPage = () => {
               placeholder={t('输入用户ID')}
             />
           </div>
-          <Button
-            icon={<RefreshCw size={14} />}
-            theme='borderless'
-            onClick={() => loadInvoices()}
-            loading={loading}
-          >
-            {t('刷新')}
-          </Button>
         </div>
       </Card>
 
       <Card bordered>
-        <Text strong style={{ marginBottom: 12, display: 'block' }}>
-          {t('发票申请列表')}
-          <Text type='tertiary' size='small' style={{ marginLeft: 8 }}>
-            ({total})
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Text strong>
+            {t('发票申请列表')}
+            <Text type='tertiary' size='small' style={{ marginLeft: 8 }}>
+              ({total})
+            </Text>
           </Text>
-        </Text>
-        <Table
+          <CompactModeToggle
+            compactMode={compactMode}
+            setCompactMode={setCompactMode}
+            t={t}
+          />
+        </div>
+        <CardTable
           columns={columns}
           dataSource={invoices}
           rowKey='id'
           pagination={{
-            current: page,
-            pageSize,
-            total,
-            onChange: (p, ps) => { setPage(p); setPageSize(ps); },
+            currentPage: page,
+            pageSize: pageSize,
+            total: total,
             showSizeChanger: true,
-            showTotal: (tot) => t('共 {{total}} 条', { total: tot }),
+            pageSizeOptions: [10, 20, 50, 100],
+            onPageSizeChange: (size) => { setPageSize(size); },
+            onPageChange: (p) => { setPage(p); },
           }}
           loading={loading}
           empty={
@@ -364,7 +375,7 @@ const InvoiceAdminPage = () => {
               description={t('暂时没有用户的发票申请')}
             />
           }
-          scroll={{ x: 1600 }}
+          scroll={compactMode ? undefined : { x: 1600 }}
         />
       </Card>
 
