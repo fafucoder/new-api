@@ -121,3 +121,136 @@ func GetInvoice(id int) (*Invoice, error) {
 	}
 	return &inv, nil
 }
+
+// SumInvoicedAmount 算指定用户的"已锁定开票金额":
+// pending + issuing + issued 都计入, rejected 不算。
+func SumInvoicedAmount(userID int) (float64, error) {
+	if userID <= 0 {
+		return 0, errors.New("invalid user id")
+	}
+	var sum float64
+	err := DB.Model(&Invoice{}).
+		Where("user_id = ? AND status IN ?", userID, []string{
+			InvoiceStatusPending, InvoiceStatusIssuing, InvoiceStatusIssued,
+		}).
+		Select("COALESCE(SUM(amount), 0)").Scan(&sum).Error
+	return sum, err
+}
+
+// HasInFlightInvoice 用户是否还有处理中的发票申请(pending / issuing)。
+// 用来防止同一用户并发发起多条申请。
+func HasInFlightInvoice(userID int) (bool, error) {
+	if userID <= 0 {
+		return false, errors.New("invalid user id")
+	}
+	var cnt int64
+	err := DB.Model(&Invoice{}).
+		Where("user_id = ? AND status IN ?", userID, []string{
+			InvoiceStatusPending, InvoiceStatusIssuing,
+		}).
+		Count(&cnt).Error
+	return cnt > 0, err
+}
+
+// TransitionInvoiceStatus 用乐观锁推进状态:
+// UPDATE invoices SET status=? [, extra...] WHERE id=? AND status=?
+// 返回 (true, nil) 表示成功;(false, nil) 表示状态已变更;
+// (_, err) 表示底层错误。
+//
+// extra 用来在同一条 UPDATE 里写入回执字段(provider_invoice_no 等),
+// 减少 race window。传 nil 表示只改 status。
+func TransitionInvoiceStatus(id int, from, to string, extra map[string]any) (bool, error) {
+	if id <= 0 {
+		return false, errors.New("invalid invoice id")
+	}
+	updates := map[string]any{"status": to}
+	for k, v := range extra {
+		updates[k] = v
+	}
+	res := DB.Model(&Invoice{}).
+		Where("id = ? AND status = ?", id, from).
+		Updates(updates)
+	if res.Error != nil {
+		return false, res.Error
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// SumTopUpSuccessMoney 用户成功充值的总金额(USD)。
+// 与 SumInvoicedAmount 配合得出"可开票余额"。
+// 注意:money 字段是充值金额(USD), 不要和 amount(配额单位) 混。
+func SumTopUpSuccessMoney(userID int) (float64, error) {
+	if userID <= 0 {
+		return 0, errors.New("invalid user id")
+	}
+	var sum float64
+	err := DB.Model(&TopUp{}).
+		Where("user_id = ? AND status = ?", userID, common.TopUpStatusSuccess).
+		Select("COALESCE(SUM(money), 0)").Scan(&sum).Error
+	return sum, err
+}
+
+// ListInvoicesForUser 拿用户自己的发票列表, 按申请时间倒序。
+func ListInvoicesForUser(userID int, page, pageSize int) ([]Invoice, int64, error) {
+	if userID <= 0 {
+		return nil, 0, errors.New("invalid user id")
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 200 {
+		pageSize = 20
+	}
+	var total int64
+	if err := DB.Model(&Invoice{}).Where("user_id = ?", userID).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var items []Invoice
+	err := DB.Where("user_id = ?", userID).
+		Order("applied_at DESC, id DESC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Find(&items).Error
+	return items, total, err
+}
+
+// InvoiceListFilter admin 查询过滤条件。零值字段被跳过。
+type InvoiceListFilter struct {
+	Statuses    []string
+	UserID      int
+	AppliedFrom int64
+	AppliedTo   int64
+}
+
+// AdminListInvoices 管理员侧列表, 支持状态 / 用户 / 时间区间筛选。
+func AdminListInvoices(filter InvoiceListFilter, page, pageSize int) ([]Invoice, int64, error) {
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 200 {
+		pageSize = 20
+	}
+	q := DB.Model(&Invoice{})
+	if len(filter.Statuses) > 0 {
+		q = q.Where("status IN ?", filter.Statuses)
+	}
+	if filter.UserID > 0 {
+		q = q.Where("user_id = ?", filter.UserID)
+	}
+	if filter.AppliedFrom > 0 {
+		q = q.Where("applied_at >= ?", filter.AppliedFrom)
+	}
+	if filter.AppliedTo > 0 {
+		q = q.Where("applied_at <= ?", filter.AppliedTo)
+	}
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var items []Invoice
+	err := q.Order("applied_at DESC, id DESC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Find(&items).Error
+	return items, total, err
+}
