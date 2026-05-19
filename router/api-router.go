@@ -197,6 +197,20 @@ func SetApiRouter(router *gin.Engine) {
 			channelValidationRoute.DELETE("/records/:id", controller.DeleteChannelValidationRecordHandler)
 			channelValidationRoute.GET("/channels/:id/models", middleware.AdminAuth(), controller.GetChannelValidationChannelModels)
 		}
+		invoiceRoute := apiRouter.Group("/invoice")
+		invoiceRoute.Use(middleware.UserAuth())
+		{
+			invoiceRoute.GET("/summary", controller.GetInvoiceSummary)
+			invoiceRoute.GET("/list", controller.GetInvoiceList)
+			invoiceRoute.POST("/apply", controller.PostInvoiceApply)
+		}
+		invoiceAdminRoute := apiRouter.Group("/invoice/admin")
+		invoiceAdminRoute.Use(middleware.AdminAuth())
+		{
+			invoiceAdminRoute.GET("/list", controller.GetInvoiceAdminList)
+			invoiceAdminRoute.POST("/:id/issue", controller.PostInvoiceIssue)
+			invoiceAdminRoute.POST("/:id/reject", controller.PostInvoiceReject)
+		}
 		optionRoute := apiRouter.Group("/option")
 		optionRoute.Use(middleware.RootAuth())
 		{
