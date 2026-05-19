@@ -10,6 +10,7 @@
 package invoice
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -117,8 +118,108 @@ func Apply(userID int, form ApplyForm) (int, error) {
 	return inv.Id, nil
 }
 
-// Issue is a stub here — Task 6 will fill it in with the full state machine.
-// Apply's async branch calls this when RequireManualReview=false.
+// Issue 把 pending 发票通过 provider 出单。
+// 状态机 pending → issuing(乐观锁) → issued / 回退 pending。
+// reviewerID=0 表示自动出单(由 Apply 异步分支触发)。
 func Issue(invoiceID int, reviewerID int) error {
-	return errors.New("Issue not implemented yet")
+	inv, err := model.GetInvoice(invoiceID)
+	if err != nil {
+		return err
+	}
+	if inv == nil {
+		return ErrInvoiceNotFound
+	}
+	if inv.Status != model.InvoiceStatusPending {
+		return ErrInvalidStatus
+	}
+
+	ok, err := model.TransitionInvoiceStatus(inv.Id,
+		model.InvoiceStatusPending, model.InvoiceStatusIssuing, nil)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrInvalidStatus
+	}
+
+	// reload to pick up the latest Provider field after transition
+	inv, _ = model.GetInvoice(invoiceID)
+	providerName := inv.Provider
+	if providerName == "" {
+		providerName = operation_setting.GetInvoiceSetting().Provider
+	}
+
+	p, err := Get(providerName)
+	if err != nil {
+		rollback(invoiceID, fmt.Sprintf("provider not registered: %s", err.Error()))
+		return err
+	}
+
+	result, perr := safeIssue(p, &IssueRequest{
+		InvoiceID:     inv.Id,
+		UserID:        inv.UserID,
+		ApplicantType: inv.ApplicantType,
+		Title:         inv.Title,
+		TaxID:         inv.TaxID,
+		Email:         inv.Email,
+		InvoiceType:   inv.InvoiceType,
+		Amount:        inv.Amount,
+	})
+	if perr != nil {
+		rollback(invoiceID, perr.Error())
+		return perr
+	}
+
+	ok, err = model.TransitionInvoiceStatus(inv.Id,
+		model.InvoiceStatusIssuing, model.InvoiceStatusIssued,
+		map[string]any{
+			"provider":            providerName,
+			"provider_invoice_no": result.ProviderInvoiceNo,
+			"provider_pdf_url":    result.PDFURL,
+			"provider_raw":        result.RawResponse,
+			"issued_at":           common.GetTimestamp(),
+			"reviewer_id":         reviewerID,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrInvalidStatus
+	}
+
+	if err := sendInvoiceIssuedEmail(inv, result); err != nil {
+		common.SysError(fmt.Sprintf("invoice notify user failed: invoice=%d err=%v",
+			inv.Id, err))
+	}
+	return nil
+}
+
+// safeIssue 包一层 recover, provider 实现 panic 时退化为 error。
+func safeIssue(p InvoiceProvider, req *IssueRequest) (result *IssueResult, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("provider panic: %v", r)
+		}
+	}()
+	return p.Issue(context.Background(), req)
+}
+
+// rollback 把 issuing 状态退回 pending, 错误写到 provider_raw。
+// 用单条 UPDATE 完成, 不抛错(避免吞掉原始 issue 错误)。
+func rollback(invoiceID int, reason string) {
+	raw := fmt.Sprintf(`{"error":%q,"at":%d}`, reason, common.GetTimestamp())
+	_, err := model.TransitionInvoiceStatus(invoiceID,
+		model.InvoiceStatusIssuing, model.InvoiceStatusPending,
+		map[string]any{"provider_raw": raw},
+	)
+	if err != nil {
+		common.SysError(fmt.Sprintf("invoice rollback failed: invoice=%d err=%v",
+			invoiceID, err))
+	}
+}
+
+// sendInvoiceIssuedEmail 邮件通知 — Task 8 实现, 这里先返回 nil。
+func sendInvoiceIssuedEmail(inv *model.Invoice, result *IssueResult) error {
+	return nil
 }
