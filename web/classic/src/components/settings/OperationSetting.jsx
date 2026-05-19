@@ -27,6 +27,7 @@ import SettingsLog from '../../pages/Setting/Operation/SettingsLog';
 import SettingsMonitoring from '../../pages/Setting/Operation/SettingsMonitoring';
 import SettingsCreditLimit from '../../pages/Setting/Operation/SettingsCreditLimit';
 import SettingsCheckin from '../../pages/Setting/Operation/SettingsCheckin';
+import SettingsInvoice from '../../pages/Setting/Operation/SettingsInvoice';
 import { API, showError, toBoolean } from '../../helpers';
 
 const OperationSetting = () => {
@@ -81,6 +82,12 @@ const OperationSetting = () => {
 
     /* 令牌设置 */
     'token_setting.max_user_tokens': 1000,
+
+    /* 发票管理 */
+    'invoice_setting.enabled': false,
+    'invoice_setting.minimum_amount': 50,
+    'invoice_setting.require_manual_review': true,
+    'invoice_setting.provider': 'stub',
   });
 
   let [loading, setLoading] = useState(false);
@@ -153,6 +160,10 @@ const OperationSetting = () => {
         {/* 签到设置 */}
         <Card style={{ marginTop: '10px' }}>
           <SettingsCheckin options={inputs} refresh={onRefresh} />
+        </Card>
+        {/* 发票管理 */}
+        <Card style={{ marginTop: '10px' }}>
+          <SettingsInvoice options={inputs} refresh={onRefresh} />
         </Card>
       </Spin>
     </>
