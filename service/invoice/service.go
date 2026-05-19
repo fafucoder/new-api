@@ -237,9 +237,28 @@ func rollback(invoiceID int, reason string) {
 	}
 }
 
-// sendInvoiceIssuedEmail 邮件通知 — Task 8 实现, 这里先返回 nil。
+// sendInvoiceIssuedEmail 给用户填写的接收邮箱发开票成功通知。
+// 直接走 common.SendEmail 是为了避开 service/invoice → service
+// 的循环 import;邮件正文 HTML 简单内联 PDF 链接, 不附件。
+// 失败仅返回 error 给调用方记日志, 不影响 issued 状态。
 func sendInvoiceIssuedEmail(inv *model.Invoice, result *IssueResult) error {
-	return nil
+	if inv == nil || result == nil {
+		return nil
+	}
+	if inv.Email == "" {
+		return nil
+	}
+	subject := "您的发票已开具"
+	pdfLine := ""
+	if result.PDFURL != "" {
+		pdfLine = fmt.Sprintf(`<br>PDF 链接: <a href="%s">%s</a>`, result.PDFURL, result.PDFURL)
+	}
+	content := fmt.Sprintf(
+		"您好,<br><br>您申请的发票已开具完成。<br>"+
+			"抬头: %s<br>金额: $%.2f<br>发票号: %s%s<br><br>如有问题请联系管理员。",
+		inv.Title, inv.Amount, result.ProviderInvoiceNo, pdfLine,
+	)
+	return common.SendEmail(subject, inv.Email, content)
 }
 
 // Reject 把 pending 申请标记为 rejected, 写 reason 和处理人。
