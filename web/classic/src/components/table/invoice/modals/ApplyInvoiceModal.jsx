@@ -215,14 +215,6 @@ const ApplyInvoiceModal = ({
                           value: 'vat_normal',
                           label: t('增值税普通发票'),
                         },
-                        ...(applicantType === 'enterprise'
-                          ? [
-                              {
-                                value: 'vat_special',
-                                label: t('增值税专用发票'),
-                              },
-                            ]
-                          : []),
                       ]}
                       style={{ width: '100%' }}
                     />
@@ -249,7 +241,7 @@ const ApplyInvoiceModal = ({
                       placeholder={
                         applicantType === 'personal'
                           ? t('个人无需填写')
-                          : t('请输入纳税人识别号')
+                          : t('请输入统一税号/统一信用代码')
                       }
                       disabled={applicantType === 'personal'}
                       showClear

@@ -9,6 +9,7 @@ type InvoiceSetting struct {
 	MinimumAmount       float64 `json:"minimum_amount"`
 	RequireManualReview bool    `json:"require_manual_review"`
 	Provider            string  `json:"provider"`
+	TopupSource         string  `json:"topup_source"` // "top_ups" | "users"
 }
 
 // 默认配置
@@ -17,6 +18,7 @@ var invoiceSetting = InvoiceSetting{
 	MinimumAmount:       50.0,
 	RequireManualReview: true,
 	Provider:            "stub",
+	TopupSource:         "top_ups",
 }
 
 func init() {

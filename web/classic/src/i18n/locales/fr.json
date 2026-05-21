@@ -3804,6 +3804,7 @@
     "请输入组名": "Veuillez saisir le nom du groupe",
     "请输入组描述": "Veuillez saisir la description du groupe",
     "请输入组织org-xxx": "Veuillez saisir l'organisation org-xxx",
+    "请输入统一税号/统一信用代码": "Veuillez saisir le numéro fiscal unifié / code de crédit unifié",
     "请输入聊天应用名称": "Veuillez saisir le nom de l'application de chat",
     "请输入补全倍率": "Saisir le ratio d'achèvement",
     "请输入要延长的小时数": "Please enter the number of hours to extend",
@@ -4393,6 +4394,9 @@
     "，当前无生效订阅，将自动使用钱包": ", aucun abonnement actif, le portefeuille sera utilisé automatiquement.",
     "，时间：": ", time:",
     "，点击更新": ", cliquez sur Mettre à jour",
-    "🎉 配置完成！": "🎉 Configuration terminée !"
+    "🎉 配置完成！": "🎉 Configuration terminée !",
+    "充值总额来源": "Source du rechargement",
+    "充值记录 (top_ups)": "Enregistrements de recharge (top_ups)",
+    "用户额度 (users)": "Quota utilisateur (users)"
   }
 }

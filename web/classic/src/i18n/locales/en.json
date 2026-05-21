@@ -3798,6 +3798,7 @@
     "请输入组名": "Please enter the group name",
     "请输入组描述": "Please enter the group description",
     "请输入组织org-xxx": "Please enter organization org-xxx",
+    "请输入统一税号/统一信用代码": "Please enter unified tax ID / unified credit code",
     "请输入聊天应用名称": "Please enter chat application name",
     "请输入补全倍率": "Enter completion ratio",
     "请输入要延长的小时数": "Please enter the number of hours to extend",
@@ -4390,6 +4391,9 @@
     "，当前无生效订阅，将自动使用钱包": ", no active subscription. Wallet will be used automatically.",
     "，时间：": ",time:",
     "，点击更新": ", click Update",
-    "🎉 配置完成！": "🎉 Configuration complete!"
+    "🎉 配置完成！": "🎉 Configuration complete!",
+    "充值总额来源": "Topup Source",
+    "充值记录 (top_ups)": "Topup Records (top_ups)",
+    "用户额度 (users)": "User Quota (users)"
   }
 }

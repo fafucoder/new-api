@@ -94,6 +94,7 @@ const OperationSetting = () => {
     'invoice_setting.minimum_amount': 50,
     'invoice_setting.require_manual_review': true,
     'invoice_setting.provider': 'stub',
+    'invoice_setting.topup_source': 'top_ups',
   });
 
   let [loading, setLoading] = useState(false);

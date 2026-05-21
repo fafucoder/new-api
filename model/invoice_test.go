@@ -87,7 +87,7 @@ func TestSumInvoicedAmount(t *testing.T) {
 			t.Fatalf("seed: %v", err)
 		}
 	}
-	got, err := SumInvoicedAmount(1)
+	got, err := SumInvoicedAmount(1, InvoiceTopupSourceTopUps)
 	if err != nil {
 		t.Fatalf("sum: %v", err)
 	}

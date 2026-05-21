@@ -15,6 +15,11 @@ import (
 )
 
 const (
+	InvoiceTopupSourceTopUps = "top_ups"
+	InvoiceTopupSourceUsers  = "users"
+)
+
+const (
 	InvoiceApplicantPersonal   = "personal"
 	InvoiceApplicantEnterprise = "enterprise"
 
@@ -43,6 +48,7 @@ type Invoice struct {
 	ProviderInvoiceNo string  `json:"provider_invoice_no" gorm:"type:varchar(64)"`
 	ProviderPDFURL    string  `json:"provider_pdf_url" gorm:"type:varchar(512)"`
 	ProviderRaw       string  `json:"provider_raw" gorm:"type:text"`
+	TopupSource       string  `json:"topup_source" gorm:"type:varchar(16);default:'top_ups'"`
 	AppliedAt         int64   `json:"applied_at"`
 	IssuedAt          int64   `json:"issued_at"`
 	CreatedTime       int64   `json:"created_time" gorm:"bigint;autoCreateTime"`
@@ -124,13 +130,14 @@ func GetInvoice(id int) (*Invoice, error) {
 
 // SumInvoicedAmount 算指定用户的"已锁定开票金额":
 // pending + issuing + issued 都计入, rejected 不算。
-func SumInvoicedAmount(userID int) (float64, error) {
+// topupSource 用于只统计同来源的发票，避免跨模式重复计算。
+func SumInvoicedAmount(userID int, topupSource string) (float64, error) {
 	if userID <= 0 {
 		return 0, errors.New("invalid user id")
 	}
 	var sum float64
 	err := DB.Model(&Invoice{}).
-		Where("user_id = ? AND status IN ?", userID, []string{
+		Where("user_id = ? AND topup_source = ? AND status IN ?", userID, topupSource, []string{
 			InvoiceStatusPending, InvoiceStatusIssuing, InvoiceStatusIssued,
 		}).
 		Select("COALESCE(SUM(amount), 0)").Scan(&sum).Error
@@ -174,6 +181,22 @@ func TransitionInvoiceStatus(id int, from, to string, extra map[string]any) (boo
 		return false, res.Error
 	}
 	return res.RowsAffected > 0, nil
+}
+
+// SumUserTotalQuota 从 users 表计算用户已消费额度并换算为 USD。
+// USD = used_quota / QuotaPerUnit
+func SumUserTotalQuota(userID int) (float64, error) {
+	if userID <= 0 {
+		return 0, errors.New("invalid user id")
+	}
+	var user User
+	if err := DB.Select("used_quota").First(&user, userID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return float64(user.UsedQuota) / common.QuotaPerUnit, nil
 }
 
 // SumTopUpSuccessMoney 用户成功充值的总金额(USD)。

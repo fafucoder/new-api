@@ -36,6 +36,7 @@ export default function SettingsInvoice(props) {
     'invoice_setting.minimum_amount': 50.0,
     'invoice_setting.require_manual_review': true,
     'invoice_setting.provider': 'stub',
+    'invoice_setting.topup_source': 'top_ups',
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -158,6 +159,18 @@ export default function SettingsInvoice(props) {
                   disabled={!inputs['invoice_setting.enabled']}
                 >
                   <Select.Option value='stub'>{t('Stub (测试用)')}</Select.Option>
+                </Form.Select>
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Select
+                  field={'invoice_setting.topup_source'}
+                  label={t('充值总额来源')}
+                  value={inputs['invoice_setting.topup_source']}
+                  onChange={handleFieldChange('invoice_setting.topup_source')}
+                  disabled={!inputs['invoice_setting.enabled']}
+                >
+                  <Select.Option value='top_ups'>{t('充值记录 (top_ups)')}</Select.Option>
+                  <Select.Option value='users'>{t('用户额度 (users)')}</Select.Option>
                 </Form.Select>
               </Col>
             </Row>

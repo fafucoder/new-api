@@ -20,7 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import React from 'react';
 import {
   Button,
-  Popconfirm,
+  Modal,
   Popover,
   Space,
   Tag,
@@ -202,25 +202,26 @@ const renderOperations = (
   }
   return (
     <Space wrap>
-      <Popconfirm
-        title={t('确认为该申请开具发票?')}
-        onConfirm={() => handleIssue(record.id)}
+      <Button
+        type='primary'
+        size='small'
+        icon={<CheckCircle size={14} />}
+        loading={operating}
+        onClick={() => {
+          Modal.confirm({
+            title: t('确认为该申请开具发票?'),
+            content: t('此修改将不可逆'),
+            onOk: () => handleIssue(record.id),
+          });
+        }}
       >
-        <Button
-          type='primary'
-          size='small'
-          icon={<CheckCircle size={14} />}
-          loading={operating}
-        >
-          {t('开具')}
-        </Button>
-      </Popconfirm>
+        {t('开具')}
+      </Button>
       <Button
         type='danger'
         size='small'
         icon={<XCircle size={14} />}
         onClick={() => openReject(record)}
-        disabled={operating}
       >
         {t('拒绝')}
       </Button>

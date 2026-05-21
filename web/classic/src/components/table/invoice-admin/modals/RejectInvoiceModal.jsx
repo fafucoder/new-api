@@ -79,12 +79,12 @@ const RejectInvoiceModal = ({
     }
   }, [visible, rule?.id]);
 
-  if (!rule) return null;
-
   const handleSubmit = async (values) => {
     setReason(values.reason || '');
     await onSubmit({ reason: values.reason || '' });
   };
+
+  const r = rule || {};
 
   return (
     <SideSheet
@@ -152,31 +152,31 @@ const RejectInvoiceModal = ({
                 {
                   key: t('用户'),
                   value: (
-                    <Text strong>{`#${rule.user_id} (ID: ${rule.id})`}</Text>
+                    <Text strong>{`#${r.user_id} (ID: ${r.id})`}</Text>
                   ),
                 },
                 {
                   key: t('发票抬头'),
-                  value: <Text strong>{rule.title || '—'}</Text>,
+                  value: <Text strong>{r.title || '—'}</Text>,
                 },
                 {
                   key: t('申请人类型'),
                   value:
-                    APPLICANT_TYPE_MAP(t)[rule.applicant_type] ||
-                    rule.applicant_type,
+                    APPLICANT_TYPE_MAP(t)[r.applicant_type] ||
+                    r.applicant_type,
                 },
                 {
                   key: t('发票类型'),
                   value:
-                    INVOICE_TYPE_MAP(t)[rule.invoice_type] || rule.invoice_type,
+                    INVOICE_TYPE_MAP(t)[r.invoice_type] || r.invoice_type,
                 },
                 {
                   key: t('税号'),
-                  value: rule.tax_id || '—',
+                  value: r.tax_id || '—',
                 },
                 {
                   key: t('接收邮箱'),
-                  value: rule.email || '—',
+                  value: r.email || '—',
                 },
                 {
                   key: t('申请金额'),
@@ -185,7 +185,7 @@ const RejectInvoiceModal = ({
                       strong
                       style={{ color: 'var(--semi-color-success)' }}
                     >
-                      {formatMoney(rule.amount)}
+                      {formatMoney(r.amount)}
                     </Text>
                   ),
                 },
@@ -195,7 +195,7 @@ const RejectInvoiceModal = ({
 
           <Card className='!rounded-2xl shadow-sm border-0 mt-2'>
             <Form
-              key={`reject-${rule.id}`}
+              key={`reject-${r.id}`}
               initValues={{ reason: reason || '' }}
               getFormApi={(api) => (formApiRef.current = api)}
               onSubmit={handleSubmit}

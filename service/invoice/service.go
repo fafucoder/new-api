@@ -52,6 +52,13 @@ func lockUser(userID int) func() {
 	return mu.Unlock
 }
 
+func sumTopup(userID int, source string) (float64, error) {
+	if source == model.InvoiceTopupSourceUsers {
+		return model.SumUserTotalQuota(userID)
+	}
+	return model.SumTopUpSuccessMoney(userID)
+}
+
 // Apply 创建一条 pending 发票申请。若 RequireManualReview=false,
 // 在事务提交后异步触发 Issue。
 func Apply(userID int, form ApplyForm) (int, error) {
@@ -74,11 +81,11 @@ func Apply(userID int, form ApplyForm) (int, error) {
 		return 0, ErrInFlightExists
 	}
 
-	topupSum, err := model.SumTopUpSuccessMoney(userID)
+	topupSum, err := sumTopup(userID, setting.TopupSource)
 	if err != nil {
 		return 0, err
 	}
-	invoicedSum, err := model.SumInvoicedAmount(userID)
+	invoicedSum, err := model.SumInvoicedAmount(userID, setting.TopupSource)
 	if err != nil {
 		return 0, err
 	}
@@ -97,6 +104,7 @@ func Apply(userID int, form ApplyForm) (int, error) {
 		Amount:        billable,
 		Status:        model.InvoiceStatusPending,
 		Provider:      setting.Provider,
+		TopupSource:   setting.TopupSource,
 		AppliedAt:     common.GetTimestamp(),
 	}
 	if err := model.CreateInvoice(inv); err != nil {
@@ -292,6 +300,7 @@ type SummaryView struct {
 	InvoicedTotal       float64 `json:"invoiced_total"`
 	Billable            float64 `json:"billable"`
 	HasInFlight         bool    `json:"has_in_flight"`
+	TopupSource         string  `json:"topup_source"`
 }
 
 // Summary 拼一个面板数据。Enabled=false 时仍允许返回(前端用于
@@ -302,15 +311,16 @@ func Summary(userID int) (*SummaryView, error) {
 		Enabled:             setting.Enabled,
 		RequireManualReview: setting.RequireManualReview,
 		MinimumAmount:       setting.MinimumAmount,
+		TopupSource:         setting.TopupSource,
 	}
 	if userID <= 0 {
 		return out, nil
 	}
-	topup, err := model.SumTopUpSuccessMoney(userID)
+	topup, err := sumTopup(userID, setting.TopupSource)
 	if err != nil {
 		return nil, err
 	}
-	invoiced, err := model.SumInvoicedAmount(userID)
+	invoiced, err := model.SumInvoicedAmount(userID, setting.TopupSource)
 	if err != nil {
 		return nil, err
 	}

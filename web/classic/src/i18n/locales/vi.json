@@ -4192,6 +4192,7 @@
     "请输入组名": "Vui lòng nhập tên nhóm",
     "请输入组描述": "Vui lòng nhập mô tả nhóm",
     "请输入组织org-xxx": "Vui lòng nhập tổ chức org-xxx",
+    "请输入统一税号/统一信用代码": "Vui lòng nhập mã số thuế thống nhất / mã tín dụng thống nhất",
     "请输入聊天应用名称": "Vui lòng nhập tên ứng dụng trò chuyện",
     "请输入补全倍率": "Vui lòng nhập tỷ lệ hoàn thành",
     "请输入要延长的小时数": "Please enter the number of hours to extend",
@@ -4915,6 +4916,9 @@
     "，当前无生效订阅，将自动使用钱包": ", hiện không có gói đăng ký hiệu lực, sẽ tự động dùng ví.",
     "，时间：": ", thời gian:",
     "，点击更新": ", nhấn để cập nhật",
-    "🎉 配置完成！": "🎉 Cấu hình hoàn tất!"
+    "🎉 配置完成！": "🎉 Cấu hình hoàn tất!",
+    "充值总额来源": "Nguồn nạp tiền",
+    "充值记录 (top_ups)": "Lịch sử nạp tiền (top_ups)",
+    "用户额度 (users)": "Hạn mức người dùng (users)"
   }
 }

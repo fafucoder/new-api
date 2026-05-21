@@ -135,6 +135,11 @@ const renderAmount = (amount, record, t) => {
           {t('接收邮箱')}: {record.email}
         </Paragraph>
       ) : null}
+      {record.reject_reason ? (
+        <Paragraph copyable={{ content: record.reject_reason }}>
+          {t('拒绝原因')}: {record.reject_reason}
+        </Paragraph>
+      ) : null}
     </div>
   );
   return (
