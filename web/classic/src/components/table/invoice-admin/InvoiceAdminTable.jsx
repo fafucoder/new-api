@@ -37,6 +37,7 @@ const InvoiceAdminTable = (data) => {
     handlePageChange,
     handlePageSizeChange,
     openReject,
+    openUpload,
     handleIssue,
     operating,
     t,
@@ -48,9 +49,10 @@ const InvoiceAdminTable = (data) => {
         t,
         openReject,
         handleIssue,
+        openUpload,
         operating,
       }),
-    [t, openReject, handleIssue, operating],
+    [t, openReject, handleIssue, openUpload, operating],
   );
 
   const tableColumns = useMemo(() => {

@@ -220,6 +220,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			invoiceAdminRoute.GET("/list", controller.GetInvoiceAdminList)
 			invoiceAdminRoute.POST("/:id/issue", controller.PostInvoiceIssue)
+			invoiceAdminRoute.POST("/:id/issue-upload", controller.PostInvoiceIssueWithUpload)
 			invoiceAdminRoute.POST("/:id/reject", controller.PostInvoiceReject)
 		}
 		optionRoute := apiRouter.Group("/option")

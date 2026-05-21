@@ -7,6 +7,7 @@
 package controller
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 
@@ -119,6 +120,41 @@ func PostInvoiceReject(c *gin.Context) {
 	_ = c.ShouldBindJSON(&req)
 	reviewerID := c.GetInt("id")
 	if err := invoicesvc.Reject(id, reviewerID, req.Reason); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+// PostInvoiceIssueWithUpload 管理员上传发票文件直接开具，不调用 provider。
+func PostInvoiceIssueWithUpload(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid id"})
+		return
+	}
+	fh, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "file required"})
+		return
+	}
+	if fh.Size > 10<<20 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "file too large (max 10MB)"})
+		return
+	}
+	f, err := fh.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	defer f.Close()
+	data, err := io.ReadAll(f)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	reviewerID := c.GetInt("id")
+	if err := invoicesvc.IssueWithUpload(id, reviewerID, fh.Filename, data); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
 		return
 	}

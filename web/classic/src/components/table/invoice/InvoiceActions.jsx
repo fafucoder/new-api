@@ -40,19 +40,30 @@ const InvoiceActions = ({
 
   return (
     <div className='flex flex-wrap gap-2 w-full md:w-auto order-2 md:order-1'>
-      <Tooltip content={tooltipContent} position='top'>
-        <span className='flex-1 md:flex-initial'>
-          <Button
-            type='primary'
-            className='w-full md:w-auto'
-            onClick={openApply}
-            disabled={!canApply}
-            size='small'
-          >
-            {t('申请开票')}
-          </Button>
-        </span>
-      </Tooltip>
+      {tooltipContent ? (
+        <Tooltip content={tooltipContent} position='top'>
+          <span className='flex-1 md:flex-initial'>
+            <Button
+              type='primary'
+              className='w-full md:w-auto'
+              onClick={openApply}
+              disabled={!canApply}
+              size='small'
+            >
+              {t('申请开票')}
+            </Button>
+          </span>
+        </Tooltip>
+      ) : (
+        <Button
+          type='primary'
+          className='flex-1 md:flex-initial md:w-auto'
+          onClick={openApply}
+          size='small'
+        >
+          {t('申请开票')}
+        </Button>
+      )}
 
       <Button
         type='tertiary'

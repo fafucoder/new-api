@@ -213,6 +213,60 @@ func Issue(invoiceID int, reviewerID int) error {
 	return nil
 }
 
+// IssueWithUpload 管理员上传发票文件直接置为 issued，不调用 provider。
+// 文件作为附件发送到用户邮箱。
+func IssueWithUpload(invoiceID int, reviewerID int, filename string, fileData []byte) error {
+	inv, err := model.GetInvoice(invoiceID)
+	if err != nil {
+		return err
+	}
+	if inv == nil {
+		return ErrInvoiceNotFound
+	}
+	if inv.Status != model.InvoiceStatusPending {
+		return ErrInvalidStatus
+	}
+
+	ok, err := model.TransitionInvoiceStatus(inv.Id,
+		model.InvoiceStatusPending, model.InvoiceStatusIssuing, nil)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrInvalidStatus
+	}
+
+	ok, err = model.TransitionInvoiceStatus(inv.Id,
+		model.InvoiceStatusIssuing, model.InvoiceStatusIssued,
+		map[string]any{
+			"provider_invoice_no": filename,
+			"issued_at":           common.GetTimestamp(),
+			"reviewer_id":         reviewerID,
+		},
+	)
+	if err != nil {
+		rollback(invoiceID, err.Error())
+		return err
+	}
+	if !ok {
+		rollback(invoiceID, "transition to issued failed")
+		return ErrInvalidStatus
+	}
+
+	if inv.Email != "" {
+		subject := "您的发票已开具"
+		content := fmt.Sprintf(
+			"您好,<br><br>您申请的发票已开具完成，请查收附件。<br>"+
+				"抬头: %s<br>金额: $%.2f<br><br>如有问题请联系管理员。",
+			inv.Title, inv.Amount,
+		)
+		if err := common.SendEmailWithAttachment(subject, inv.Email, content, filename, fileData); err != nil {
+			common.SysError(fmt.Sprintf("invoice upload notify failed: invoice=%d err=%v", inv.Id, err))
+		}
+	}
+	return nil
+}
+
 // safeIssue 包一层 recover, provider 实现 panic 时退化为 error。
 func safeIssue(p InvoiceProvider, req *IssueRequest) (result *IssueResult, err error) {
 	defer func() {

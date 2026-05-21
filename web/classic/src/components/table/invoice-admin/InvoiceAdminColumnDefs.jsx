@@ -33,6 +33,7 @@ import {
   Clock,
   Download,
   FileSignature,
+  Upload,
   XCircle,
 } from 'lucide-react';
 
@@ -176,7 +177,7 @@ const renderInvoiceNo = (no, record, t) => {
 
 const renderOperations = (
   record,
-  { openReject, handleIssue, operating, t },
+  { openReject, handleIssue, openUpload, operating, t },
 ) => {
   // Non-pending rows: show download PDF only if available
   if (record.status !== 'pending') {
@@ -218,6 +219,14 @@ const renderOperations = (
         {t('开具')}
       </Button>
       <Button
+        type='secondary'
+        size='small'
+        icon={<Upload size={14} />}
+        onClick={() => openUpload(record)}
+      >
+        {t('上传开具')}
+      </Button>
+      <Button
         type='danger'
         size='small'
         icon={<XCircle size={14} />}
@@ -233,6 +242,7 @@ export const getInvoiceAdminColumns = ({
   t,
   openReject,
   handleIssue,
+  openUpload,
   operating,
 }) => {
   return [
@@ -284,6 +294,7 @@ export const getInvoiceAdminColumns = ({
         renderOperations(record, {
           openReject,
           handleIssue,
+          openUpload,
           operating,
           t,
         }),

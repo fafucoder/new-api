@@ -195,6 +195,39 @@ export const useInvoiceAdminData = () => {
     }
   };
 
+  // Issue with upload SideSheet
+  const [uploadingRule, setUploadingRule] = useState(null);
+  const [uploadSubmitting, setUploadSubmitting] = useState(false);
+
+  const openUpload = (rule) => setUploadingRule(rule);
+  const closeUpload = () => setUploadingRule(null);
+
+  const submitUpload = async (file) => {
+    if (!uploadingRule) return;
+    setUploadSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await API.post(
+        `/api/invoice/admin/${uploadingRule.id}/issue-upload`,
+        formData,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
+      const { success, message } = res.data || {};
+      if (success) {
+        showSuccess(t('开票成功'));
+        closeUpload();
+        await refresh();
+      } else {
+        showError(message || t('操作失败'));
+      }
+    } catch (e) {
+      showError(e?.response?.data?.message || e?.message);
+    } finally {
+      setUploadSubmitting(false);
+    }
+  };
+
   return {
     t,
     invoices: filteredInvoices,
@@ -222,5 +255,11 @@ export const useInvoiceAdminData = () => {
     openReject,
     closeReject,
     submitReject,
+    // Upload issue
+    uploadingRule,
+    uploadSubmitting,
+    openUpload,
+    closeUpload,
+    submitUpload,
   };
 };

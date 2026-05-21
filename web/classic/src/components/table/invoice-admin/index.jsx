@@ -24,6 +24,7 @@ import InvoiceAdminActions from './InvoiceAdminActions';
 import InvoiceAdminFilters from './InvoiceAdminFilters';
 import InvoiceAdminDescription from './InvoiceAdminDescription';
 import RejectInvoiceModal from './modals/RejectInvoiceModal';
+import IssueUploadModal from './modals/IssueUploadModal';
 import { useInvoiceAdminData } from '../../../hooks/invoiceAdmin/useInvoiceAdminData';
 import { useIsMobile } from '../../../hooks/common/useIsMobile';
 import { createCardProPagination } from '../../../helpers/utils';
@@ -53,6 +54,10 @@ function InvoiceAdminPage() {
     rejectSubmitting,
     closeReject,
     submitReject,
+    uploadingRule,
+    uploadSubmitting,
+    closeUpload,
+    submitUpload,
   } = data;
 
   return (
@@ -65,6 +70,13 @@ function InvoiceAdminPage() {
         submitting={rejectSubmitting}
         onCancel={closeReject}
         onSubmit={submitReject}
+      />
+      <IssueUploadModal
+        visible={!!uploadingRule}
+        rule={uploadingRule}
+        submitting={uploadSubmitting}
+        onCancel={closeUpload}
+        onSubmit={submitUpload}
       />
 
       <CardPro

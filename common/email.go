@@ -1,10 +1,13 @@
 package common
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"mime/multipart"
 	"net/smtp"
+	"net/textproto"
 	"slices"
 	"strings"
 	"time"
@@ -99,6 +102,92 @@ func SendEmail(subject string, receiver string, content string) error {
 	}
 	if err != nil {
 		SysError(fmt.Sprintf("failed to send email to %s: %v", receiver, err))
+	}
+	return err
+}
+
+// SendEmailWithAttachment 发送带附件的邮件。
+func SendEmailWithAttachment(subject, receiver, content, attachmentName string, attachmentData []byte) error {
+	if SMTPFrom == "" {
+		SMTPFrom = SMTPAccount
+	}
+	if SMTPServer == "" && SMTPAccount == "" {
+		return fmt.Errorf("SMTP 服务器未配置")
+	}
+	id, err := generateMessageID()
+	if err != nil {
+		return err
+	}
+	encodedSubject := fmt.Sprintf("=?UTF-8?B?%s?=", base64.StdEncoding.EncodeToString([]byte(subject)))
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+
+	header := fmt.Sprintf("To: %s\r\nFrom: %s <%s>\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%s\r\n\r\n",
+		receiver, SystemName, SMTPFrom, encodedSubject,
+		time.Now().Format(time.RFC1123Z), id, w.Boundary())
+
+	// HTML body part
+	hw, _ := w.CreatePart(textproto.MIMEHeader{
+		"Content-Type": {"text/html; charset=UTF-8"},
+	})
+	fmt.Fprint(hw, content)
+
+	// Attachment part
+	encodedName := fmt.Sprintf("=?UTF-8?B?%s?=", base64.StdEncoding.EncodeToString([]byte(attachmentName)))
+	aw, _ := w.CreatePart(textproto.MIMEHeader{
+		"Content-Type":              {"application/octet-stream"},
+		"Content-Transfer-Encoding": {"base64"},
+		"Content-Disposition":       {fmt.Sprintf(`attachment; filename="%s"`, encodedName)},
+	})
+	enc := base64.NewEncoder(base64.StdEncoding, aw)
+	enc.Write(attachmentData)
+	enc.Close()
+	w.Close()
+
+	mail := append([]byte(header), buf.Bytes()...)
+	auth := getSMTPAuth()
+	addr := fmt.Sprintf("%s:%d", SMTPServer, SMTPPort)
+	to := strings.Split(receiver, ";")
+
+	if SMTPPort == 465 || SMTPSSLEnabled {
+		tlsConfig := &tls.Config{InsecureSkipVerify: true, ServerName: SMTPServer}
+		conn, err := tls.Dial("tcp", fmt.Sprintf("%s:%d", SMTPServer, SMTPPort), tlsConfig)
+		if err != nil {
+			return err
+		}
+		client, err := smtp.NewClient(conn, SMTPServer)
+		if err != nil {
+			return err
+		}
+		defer client.Close()
+		if err = client.Auth(auth); err != nil {
+			return err
+		}
+		if err = client.Mail(SMTPFrom); err != nil {
+			return err
+		}
+		for _, r := range to {
+			if err = client.Rcpt(r); err != nil {
+				return err
+			}
+		}
+		dw, err := client.Data()
+		if err != nil {
+			return err
+		}
+		if _, err = dw.Write(mail); err != nil {
+			return err
+		}
+		err = dw.Close()
+		if err != nil {
+			SysError(fmt.Sprintf("failed to send email with attachment to %s: %v", receiver, err))
+		}
+		return err
+	}
+	err = smtp.SendMail(addr, auth, SMTPFrom, to, mail)
+	if err != nil {
+		SysError(fmt.Sprintf("failed to send email with attachment to %s: %v", receiver, err))
 	}
 	return err
 }
