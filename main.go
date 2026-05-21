@@ -117,6 +117,10 @@ func main() {
 	// Periodically purge channel uptime history beyond the 7-day retention window.
 	go service.AutomaticallyCleanupUptimeRecords()
 
+	// Periodically scan balance alert rules and notify when upstream
+	// balance drops below threshold.
+	go service.AutomaticallyAlertBalance()
+
 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
 	service.StartCodexCredentialAutoRefreshTask()
 

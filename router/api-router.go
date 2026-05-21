@@ -197,6 +197,32 @@ func SetApiRouter(router *gin.Engine) {
 			channelValidationRoute.DELETE("/records/:id", controller.DeleteChannelValidationRecordHandler)
 			channelValidationRoute.GET("/channels/:id/models", middleware.AdminAuth(), controller.GetChannelValidationChannelModels)
 		}
+		balanceAlertRoute := apiRouter.Group("/balance-alert")
+		balanceAlertRoute.Use(middleware.AdminAuth())
+		{
+			balanceAlertRoute.GET("/rules", controller.GetBalanceAlertRules)
+			balanceAlertRoute.POST("/rules", controller.PostBalanceAlertRule)
+			balanceAlertRoute.PUT("/rules/:id", controller.PutBalanceAlertRule)
+			balanceAlertRoute.DELETE("/rules/:id", controller.DeleteBalanceAlertRuleHandler)
+			balanceAlertRoute.POST("/rules/:id/topup", controller.PostBalanceAlertRuleTopup)
+			balanceAlertRoute.GET("/tags", controller.GetBalanceAlertTags)
+			balanceAlertRoute.POST("/rules/:id/test", controller.PostBalanceAlertRuleTest)
+		}
+		invoiceRoute := apiRouter.Group("/invoice")
+		invoiceRoute.Use(middleware.UserAuth())
+		{
+			invoiceRoute.GET("/summary", controller.GetInvoiceSummary)
+			invoiceRoute.GET("/list", controller.GetInvoiceList)
+			invoiceRoute.POST("/apply", controller.PostInvoiceApply)
+		}
+		invoiceAdminRoute := apiRouter.Group("/invoice/admin")
+		invoiceAdminRoute.Use(middleware.AdminAuth())
+		{
+			invoiceAdminRoute.GET("/list", controller.GetInvoiceAdminList)
+			invoiceAdminRoute.POST("/:id/issue", controller.PostInvoiceIssue)
+			invoiceAdminRoute.POST("/:id/issue-upload", controller.PostInvoiceIssueWithUpload)
+			invoiceAdminRoute.POST("/:id/reject", controller.PostInvoiceReject)
+		}
 		optionRoute := apiRouter.Group("/option")
 		optionRoute.Use(middleware.RootAuth())
 		{

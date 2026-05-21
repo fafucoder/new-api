@@ -46,6 +46,7 @@ func TestMain(m *testing.M) {
 		&UserSubscription{},
 		&ChannelUptimeRecord{},
 		&Ability{},
+		&Invoice{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}

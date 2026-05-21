@@ -57,6 +57,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     subscription: true,
     setting: true,
     cacheHitStats: true,
+    balanceAlert: true,
   },
 };
 

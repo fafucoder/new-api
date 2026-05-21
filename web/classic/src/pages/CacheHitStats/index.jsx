@@ -263,7 +263,7 @@ export default function CacheHitStats() {
           </div>
         </div>
         <div className='chs-header-right'>
-          <Button icon={<RefreshCw size={14} />} onClick={fetchData} loading={loading}>{t('刷新')}</Button>
+          <Button icon={<RefreshCw size={14} />} onClick={fetchData} loading={loading}>{t('立即刷新')}</Button>
         </div>
       </div>
       <div className='chs-toolbar'>

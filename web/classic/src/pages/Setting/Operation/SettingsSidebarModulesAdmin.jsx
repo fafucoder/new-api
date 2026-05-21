@@ -59,6 +59,7 @@ export default function SettingsSidebarModulesAdmin(props) {
     personal: {
       enabled: true,
       topup: true,
+      invoice: true,
       personal: true,
     },
     admin: {
@@ -71,6 +72,8 @@ export default function SettingsSidebarModulesAdmin(props) {
       subscription: true,
       setting: true,
       cacheHitStats: true,
+      balanceAlert: true,
+      invoiceAdmin: true,
     },
   });
 
@@ -195,6 +198,15 @@ export default function SettingsSidebarModulesAdmin(props) {
         if (modules.admin && modules.admin.cacheHitStats === undefined) {
           modules.admin.cacheHitStats = true;
         }
+        if (modules.admin && modules.admin.balanceAlert === undefined) {
+          modules.admin.balanceAlert = true;
+        }
+        if (modules.personal && modules.personal.invoice === undefined) {
+          modules.personal.invoice = true;
+        }
+        if (modules.admin && modules.admin.invoiceAdmin === undefined) {
+          modules.admin.invoiceAdmin = true;
+        }
         setSidebarModulesAdmin(modules);
       } catch (error) {
         // 使用默认配置
@@ -269,6 +281,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       description: t('用户个人功能'),
       modules: [
         { key: 'topup', title: t('钱包管理'), description: t('余额充值管理') },
+        { key: 'invoice', title: t('发票管理'), description: t('发票申请与管理') },
         {
           key: 'personal',
           title: t('个人设置'),
@@ -304,7 +317,9 @@ export default function SettingsSidebarModulesAdmin(props) {
           title: t('系统设置'),
           description: t('系统参数配置'),
         },
-        { key: 'cacheHitStats', title: t('缓存管理'), description: t('缓存命中率统计') },
+        { key: 'cacheHitStats', title: t('缓存监控'), description: t('缓存命中率统计') },
+        { key: 'balanceAlert', title: t('余额监控'), description: t('上游余额告警与 webhook 通知') },
+        { key: 'invoiceAdmin', title: t('发票审核'), description: t('用户发票申请审核') },
       ],
     },
   ];

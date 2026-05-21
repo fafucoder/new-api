@@ -27,6 +27,8 @@ import SettingsLog from '../../pages/Setting/Operation/SettingsLog';
 import SettingsMonitoring from '../../pages/Setting/Operation/SettingsMonitoring';
 import SettingsCreditLimit from '../../pages/Setting/Operation/SettingsCreditLimit';
 import SettingsCheckin from '../../pages/Setting/Operation/SettingsCheckin';
+import SettingsInvoice from '../../pages/Setting/Operation/SettingsInvoice';
+import SettingsBalanceAlert from '../../pages/Setting/Operation/SettingsBalanceAlert';
 import { API, showError, toBoolean } from '../../helpers';
 
 const OperationSetting = () => {
@@ -79,8 +81,20 @@ const OperationSetting = () => {
     'checkin_setting.min_quota': 1000,
     'checkin_setting.max_quota': 10000,
 
+    /* 余额监控告警 */
+    'monitor_setting.auto_balance_alert_enabled': false,
+    'monitor_setting.auto_balance_alert_minutes': 30,
+    'monitor_setting.balance_alert_cooldown_minutes': 6,
+
     /* 令牌设置 */
     'token_setting.max_user_tokens': 1000,
+
+    /* 发票管理 */
+    'invoice_setting.enabled': false,
+    'invoice_setting.minimum_amount': 50,
+    'invoice_setting.require_manual_review': true,
+    'invoice_setting.provider': 'stub',
+    'invoice_setting.topup_source': 'top_ups',
   });
 
   let [loading, setLoading] = useState(false);
@@ -146,6 +160,10 @@ const OperationSetting = () => {
         <Card style={{ marginTop: '10px' }}>
           <SettingsMonitoring options={inputs} refresh={onRefresh} />
         </Card>
+        {/* 余额监控告警设置 */}
+        <Card style={{ marginTop: '10px' }}>
+          <SettingsBalanceAlert options={inputs} refresh={onRefresh} />
+        </Card>
         {/* 额度设置 */}
         <Card style={{ marginTop: '10px' }}>
           <SettingsCreditLimit options={inputs} refresh={onRefresh} />
@@ -153,6 +171,10 @@ const OperationSetting = () => {
         {/* 签到设置 */}
         <Card style={{ marginTop: '10px' }}>
           <SettingsCheckin options={inputs} refresh={onRefresh} />
+        </Card>
+        {/* 发票管理 */}
+        <Card style={{ marginTop: '10px' }}>
+          <SettingsInvoice options={inputs} refresh={onRefresh} />
         </Card>
       </Spin>
     </>

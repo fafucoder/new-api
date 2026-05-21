@@ -60,6 +60,9 @@ const Status = lazy(() => import('./pages/Status'));
 const ModelStatus = lazy(() => import('./pages/ModelStatus'));
 const CacheHitStats = lazy(() => import('./pages/CacheHitStats'));
 const ChannelValidation = lazy(() => import('./pages/ChannelValidation'));
+const BalanceAlert = lazy(() => import('./pages/BalanceAlert'));
+const Invoice = lazy(() => import('./pages/Invoice'));
+const InvoiceAdmin = lazy(() => import('./pages/InvoiceAdmin'));
 
 function DynamicOAuth2Callback() {
   const { provider } = useParams();
@@ -358,6 +361,36 @@ function App() {
                 <CacheHitStats />
               </Suspense>
             </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/balanceAlert'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <BalanceAlert />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/invoice'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <Invoice />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/invoice-admin'
+          element={
+            <AdminRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <InvoiceAdmin />
+              </Suspense>
+            </AdminRoute>
           }
         />
         <Route
