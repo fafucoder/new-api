@@ -34,7 +34,7 @@ export default function SettingsBalanceAlert(props) {
   const [inputs, setInputs] = useState({
     'monitor_setting.auto_balance_alert_enabled': false,
     'monitor_setting.auto_balance_alert_minutes': 30,
-    'monitor_setting.balance_alert_cooldown_hours': 6,
+    'monitor_setting.balance_alert_cooldown_minutes': 5,
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -149,19 +149,19 @@ export default function SettingsBalanceAlert(props) {
               </Col>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
                 <Form.InputNumber
-                  field={'monitor_setting.balance_alert_cooldown_hours'}
+                  field={'monitor_setting.balance_alert_cooldown_minutes'}
                   label={t('余额告警冷却时间')}
-                  step={1}
-                  min={1}
-                  suffix={t('小时')}
+                  step={5}
+                  min={5}
+                  suffix={t('分钟')}
                   extraText={t(
-                    '持续低余额时,每隔多少小时重复告警一次,避免 spam',
+                    '持续低余额时,每隔多少分钟重复告警一次,避免 spam',
                   )}
                   placeholder={''}
                   disabled={!enabled}
                   onChange={(value) =>
                     handleFieldChange(
-                      'monitor_setting.balance_alert_cooldown_hours',
+                      'monitor_setting.balance_alert_cooldown_minutes',
                     )(parseInt(value))
                   }
                 />

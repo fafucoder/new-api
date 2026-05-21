@@ -204,6 +204,7 @@ func SetApiRouter(router *gin.Engine) {
 			balanceAlertRoute.POST("/rules", controller.PostBalanceAlertRule)
 			balanceAlertRoute.PUT("/rules/:id", controller.PutBalanceAlertRule)
 			balanceAlertRoute.DELETE("/rules/:id", controller.DeleteBalanceAlertRuleHandler)
+			balanceAlertRoute.POST("/rules/:id/topup", controller.PostBalanceAlertRuleTopup)
 			balanceAlertRoute.GET("/tags", controller.GetBalanceAlertTags)
 			balanceAlertRoute.POST("/rules/:id/test", controller.PostBalanceAlertRuleTest)
 		}

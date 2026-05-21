@@ -18,14 +18,22 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import InvoiceAdminPage from '../../components/table/invoice-admin';
+import { Button } from '@douyinfe/semi-ui';
 
-const InvoiceAdmin = () => {
+const InvoiceAdminActions = ({ refresh, loading, t }) => {
   return (
-    <div className='mt-[60px] px-2'>
-      <InvoiceAdminPage />
+    <div className='flex flex-wrap gap-2 w-full md:w-auto order-2 md:order-1'>
+      <Button
+        type='tertiary'
+        className='flex-1 md:flex-initial'
+        onClick={refresh}
+        loading={loading}
+        size='small'
+      >
+        {t('刷新')}
+      </Button>
     </div>
   );
 };
 
-export default InvoiceAdmin;
+export default InvoiceAdminActions;

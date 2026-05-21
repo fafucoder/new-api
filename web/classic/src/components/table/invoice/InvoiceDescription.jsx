@@ -18,14 +18,27 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import InvoiceAdminPage from '../../components/table/invoice-admin';
+import { Typography } from '@douyinfe/semi-ui';
+import { FileText } from 'lucide-react';
+import CompactModeToggle from '../../common/ui/CompactModeToggle';
 
-const InvoiceAdmin = () => {
+const { Text } = Typography;
+
+const InvoiceDescription = ({ compactMode, setCompactMode, t }) => {
   return (
-    <div className='mt-[60px] px-2'>
-      <InvoiceAdminPage />
+    <div className='flex flex-col md:flex-row justify-between items-start md:items-center gap-2 w-full'>
+      <div className='flex items-center text-blue-500'>
+        <FileText size={16} className='mr-2' />
+        <Text>{t('申请记录')}</Text>
+      </div>
+
+      <CompactModeToggle
+        compactMode={compactMode}
+        setCompactMode={setCompactMode}
+        t={t}
+      />
     </div>
   );
 };
 
-export default InvoiceAdmin;
+export default InvoiceDescription;

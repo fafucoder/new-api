@@ -31,6 +31,7 @@ type balanceChannelBrief struct {
 	Type               int     `json:"type"`
 	Status             int     `json:"status"`
 	Balance            float64 `json:"balance"`
+	UsedQuota          int64   `json:"used_quota"`
 	BalanceUpdatedTime int64   `json:"balance_updated_time"`
 }
 
@@ -58,6 +59,7 @@ func GetBalanceAlertRules(c *gin.Context) {
 					Type:               ch.Type,
 					Status:             ch.Status,
 					Balance:            ch.Balance,
+					UsedQuota:          ch.UsedQuota,
 					BalanceUpdatedTime: ch.BalanceUpdatedTime,
 				})
 			}
@@ -136,6 +138,39 @@ func DeleteBalanceAlertRuleHandler(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
+}
+
+// PostBalanceAlertRuleTopup 充值:把 amount 累加到 rule.TotalQuota,
+// 并把 alert_state 拨回 normal,这样"充值后再跌破"能立即重新告警,
+// 不被冷却抑制。
+func PostBalanceAlertRuleTopup(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid rule id"})
+		return
+	}
+	var body struct {
+		Amount float64 `json:"amount"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if body.Amount <= 0 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "充值金额必须大于 0"})
+		return
+	}
+	if err := model.TopupBalanceAlertRule(id, body.Amount); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	updated, _ := model.GetBalanceAlertRule(id)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    updated,
+	})
 }
 
 // GetBalanceAlertTags 返回 channels 表里所有非空 tag,给前端

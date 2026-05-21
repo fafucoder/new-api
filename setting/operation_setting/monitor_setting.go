@@ -12,7 +12,7 @@ type MonitorSetting struct {
 	AutoTestChannelMinutes    float64 `json:"auto_test_channel_minutes"`
 	AutoBalanceAlertEnabled   bool    `json:"auto_balance_alert_enabled"`
 	AutoBalanceAlertMinutes   float64 `json:"auto_balance_alert_minutes"`
-	BalanceAlertCooldownHours float64 `json:"balance_alert_cooldown_hours"`
+	BalanceAlertCooldownMinutes float64 `json:"balance_alert_cooldown_minutes"`
 }
 
 // 默认配置
@@ -21,7 +21,7 @@ var monitorSetting = MonitorSetting{
 	AutoTestChannelMinutes:    10,
 	AutoBalanceAlertEnabled:   false,
 	AutoBalanceAlertMinutes:   30,
-	BalanceAlertCooldownHours: 6,
+	BalanceAlertCooldownMinutes: 60,
 }
 
 func init() {

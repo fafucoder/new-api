@@ -19,12 +19,8 @@ import (
 )
 
 const (
-	// DefaultBalanceAlertCooldownHours 持续低余额时的告警冷却,
-	// 防止规则一直跌破阈值就一直发。
-	DefaultBalanceAlertCooldownHours = 6
-	// balanceAlertMinScanInterval 配置异常或暂关时的轮询心跳,
-	// 让"刚开启就生效"不需要等到下一个长间隔。
-	balanceAlertMinScanInterval = time.Minute
+	DefaultBalanceAlertCooldownMinutes = 60
+	balanceAlertMinScanInterval        = time.Minute
 )
 
 // AutomaticallyAlertBalance 后台循环。在 main.go 用 `go` 起,
@@ -63,8 +59,8 @@ func runBalanceAlertScan() {
 }
 
 // evaluateBalanceAlertRule 检查单条规则,按状态翻转 + cooldown 决
-// 定是否发告警。balance < threshold 触发;balance >= threshold 清
-// 状态。无渠道(tag 不命中)按 normal 处理,避免无意义告警。
+// 定是否发告警。剩余 < threshold 触发;剩余 >= threshold 清状态。
+// 无渠道(tag 不命中)或未配置总额度按 normal 处理,避免无意义告警。
 func evaluateBalanceAlertRule(rule *model.BalanceAlertRule) error {
 	summary, err := model.AggregateBalanceForTag(rule.Tag)
 	if err != nil {
@@ -73,17 +69,22 @@ func evaluateBalanceAlertRule(rule *model.BalanceAlertRule) error {
 	if summary == nil || summary.ChannelCount == 0 {
 		return model.MarkBalanceAlertRuleScanned(rule.Id, 0, model.BalanceAlertStateNormal, false)
 	}
+	// 未配置总额度(TotalQuota=0)时,无法判定"剩余"是否足够。
+	// 把状态保持为 normal,等待管理员补录,避免一上线就发 spam 告警。
+	if rule.TotalQuota <= 0 {
+		return model.MarkBalanceAlertRuleScanned(rule.Id, summary.Balance, model.BalanceAlertStateNormal, false)
+	}
 
 	balance := summary.Balance
 	if balance >= rule.Threshold {
 		return model.MarkBalanceAlertRuleScanned(rule.Id, balance, model.BalanceAlertStateNormal, false)
 	}
 
-	cooldownHours := operation_setting.GetMonitorSetting().BalanceAlertCooldownHours
-	if cooldownHours <= 0 {
-		cooldownHours = DefaultBalanceAlertCooldownHours
+	cooldownMinutes := operation_setting.GetMonitorSetting().BalanceAlertCooldownMinutes
+	if cooldownMinutes <= 0 {
+		cooldownMinutes = DefaultBalanceAlertCooldownMinutes
 	}
-	cooldownSec := int64(cooldownHours * 3600)
+	cooldownSec := int64(cooldownMinutes * 60)
 	now := time.Now().Unix()
 	shouldAlert := rule.AlertState != model.BalanceAlertStateAlerting ||
 		rule.LastAlertedAt == 0 ||
@@ -112,7 +113,8 @@ func SendBalanceAlert(rule *model.BalanceAlertRule, balance float64, isTest bool
 	}
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "上游标签: %s\n", rule.Tag)
-	fmt.Fprintf(&sb, "当前余额: $%.4f\n", balance)
+	fmt.Fprintf(&sb, "总额度: $%.4f\n", rule.TotalQuota)
+	fmt.Fprintf(&sb, "当前剩余: $%.4f\n", balance)
 	fmt.Fprintf(&sb, "告警阈值: $%.4f\n", rule.Threshold)
 	if rule.Remark != "" {
 		fmt.Fprintf(&sb, "备注: %s\n", rule.Remark)

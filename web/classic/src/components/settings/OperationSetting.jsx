@@ -84,7 +84,7 @@ const OperationSetting = () => {
     /* 余额监控告警 */
     'monitor_setting.auto_balance_alert_enabled': false,
     'monitor_setting.auto_balance_alert_minutes': 30,
-    'monitor_setting.balance_alert_cooldown_hours': 6,
+    'monitor_setting.balance_alert_cooldown_minutes': 6,
 
     /* 令牌设置 */
     'token_setting.max_user_tokens': 1000,
