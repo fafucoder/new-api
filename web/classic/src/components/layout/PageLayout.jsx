@@ -43,7 +43,7 @@ const { Sider, Content, Header } = Layout;
 
 const PageLayout = () => {
   const [userState, userDispatch] = useContext(UserContext);
-  const [, statusDispatch] = useContext(StatusContext);
+  const [statusState, statusDispatch] = useContext(StatusContext);
   const isMobile = useIsMobile();
   const [collapsed, , setCollapsed] = useSidebarCollapsed();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -60,9 +60,13 @@ const PageLayout = () => {
     '/console/task',
     '/console/models',
     '/pricing',
+    '/landing',
   ];
 
-  const shouldHideFooter = cardProPages.includes(location.pathname);
+  const shouldHideFooter =
+    cardProPages.includes(location.pathname) ||
+    (location.pathname === '/' &&
+      (statusState?.status?.landing_page_enabled || false));
 
   const shouldInnerPadding =
     (location.pathname.includes('/console') || 

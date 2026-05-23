@@ -52,6 +52,7 @@ import Setup from './pages/Setup';
 import SetupCheck from './components/layout/SetupCheck';
 
 const Home = lazy(() => import('./pages/Home'));
+const Landing = lazy(() => import('./pages/Landing'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const About = lazy(() => import('./pages/About'));
 const Tutorial = lazy(() => import('./pages/Tutorial'));
@@ -104,6 +105,14 @@ function App() {
           element={
             <Suspense fallback={<Loading></Loading>} key={location.pathname}>
               <Home />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/landing'
+          element={
+            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+              <Landing />
             </Suspense>
           }
         />

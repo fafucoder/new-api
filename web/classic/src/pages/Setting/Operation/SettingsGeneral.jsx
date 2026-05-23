@@ -57,6 +57,7 @@ export default function GeneralSettings(props) {
     DefaultCollapseSidebar: false,
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
+    LandingPageEnabled: false,
     'token_setting.max_user_tokens': 1000,
   });
   const refForm = useRef();
@@ -388,6 +389,17 @@ export default function GeneralSettings(props) {
                   checkedText='｜'
                   uncheckedText='〇'
                   onChange={handleFieldChange('SelfUseModeEnabled')}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'LandingPageEnabled'}
+                  label={t('启用 Landing 首页')}
+                  extraText={t('开启后,根路径 / 渲染 Landing 页;关闭则展示默认首页 Banner')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={handleFieldChange('LandingPageEnabled')}
                 />
               </Col>
             </Row>
