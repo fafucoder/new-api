@@ -343,6 +343,10 @@ func GetByTaskId(userId int, taskId string) (*Task, bool, error) {
 	return task, exist, err
 }
 
+func DeleteTaskByTaskId(userId int, taskId string) error {
+	return DB.Where("user_id = ? and task_id = ?", userId, taskId).Delete(&Task{}).Error
+}
+
 func GetByTaskIds(userId int, taskIds []any) ([]*Task, error) {
 	if len(taskIds) == 0 {
 		return nil, nil

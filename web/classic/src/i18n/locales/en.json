@@ -4394,6 +4394,21 @@
     "🎉 配置完成！": "🎉 Configuration complete!",
     "充值总额来源": "Topup Source",
     "充值记录 (top_ups)": "Topup Records (top_ups)",
-    "用户额度 (users)": "User Quota (users)"
+    "用户额度 (users)": "User Quota (users)",
+    "视频配置": "Video Config",
+    "视频生成": "Video Generation",
+    "时长（秒）": "Duration (s)",
+    "画面比例": "Aspect Ratio",
+    "分辨率": "Resolution",
+    "生成音频": "Generate Audio",
+    "水印": "Watermark",
+    "首帧图片 URL（可选）": "First Frame Image URL (optional)",
+    "尾帧图片 URL（可选）": "Last Frame Image URL (optional)",
+    "参考视频 URL（可选）": "Reference Video URL (optional)",
+    "参考音频 URL（可选）": "Reference Audio URL (optional)",
+    "生成中...": "Generating...",
+    "生成失败": "Generation failed",
+    "AI 视频生成": "AI Video Generation",
+    "描述你想生成的视频内容...": "Describe the video you want to generate..."
   }
 }

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"net/http"
 	"strconv"
 
 	"github.com/QuantumNous/new-api/common"
@@ -24,7 +25,6 @@ func GetAllTask(c *gin.Context) {
 
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
-	// 解析其他查询参数
 	queryParams := model.SyncTaskQueryParams{
 		Platform:       constant.TaskPlatform(c.Query("platform")),
 		TaskID:         c.Query("task_id"),
@@ -44,7 +44,6 @@ func GetAllTask(c *gin.Context) {
 
 func GetUserTask(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
-
 	userId := c.GetInt("id")
 
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
@@ -64,6 +63,20 @@ func GetUserTask(c *gin.Context) {
 	pageInfo.SetTotal(int(total))
 	pageInfo.SetItems(tasksToDto(items, false))
 	common.ApiSuccess(c, pageInfo)
+}
+
+func DeleteUserTask(c *gin.Context) {
+	userId := c.GetInt("id")
+	taskId := c.Param("task_id")
+	if taskId == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "task_id is required"})
+		return
+	}
+	if err := model.DeleteTaskByTaskId(userId, taskId); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	common.ApiSuccess(c, nil)
 }
 
 func tasksToDto(tasks []*model.Task, fillUser bool) []*dto.TaskDto {

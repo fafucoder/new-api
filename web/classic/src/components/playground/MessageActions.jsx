@@ -32,6 +32,9 @@ const MessageActions = ({
   onMessageEdit,
   isAnyMessageGenerating = false,
   isEditing = false,
+  showRoleToggle = true,
+  showReset = true,
+  showDelete = true,
 }) => {
   const { t } = useTranslation();
 
@@ -39,7 +42,8 @@ const MessageActions = ({
     message.status === 'loading' || message.status === 'incomplete';
   const shouldDisableActions = isAnyMessageGenerating || isEditing;
   const canToggleRole =
-    message.role === 'assistant' || message.role === 'system';
+    showRoleToggle &&
+    (message.role === 'assistant' || message.role === 'system');
   const canEdit =
     !isLoading &&
     message.content &&
@@ -48,7 +52,7 @@ const MessageActions = ({
 
   return (
     <div className='flex items-center gap-0.5'>
-      {!isLoading && (
+      {showReset && !isLoading && (
         <Tooltip
           content={shouldDisableActions ? t('操作暂时被禁用') : t('重试')}
           position='top'
@@ -128,7 +132,7 @@ const MessageActions = ({
         </Tooltip>
       )}
 
-      {!isLoading && (
+      {showDelete && !isLoading && (
         <Tooltip
           content={shouldDisableActions ? t('操作暂时被禁用') : t('删除')}
           position='top'

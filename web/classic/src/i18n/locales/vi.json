@@ -4919,6 +4919,21 @@
     "🎉 配置完成！": "🎉 Cấu hình hoàn tất!",
     "充值总额来源": "Nguồn nạp tiền",
     "充值记录 (top_ups)": "Lịch sử nạp tiền (top_ups)",
-    "用户额度 (users)": "Hạn mức người dùng (users)"
+    "用户额度 (users)": "Hạn mức người dùng (users)",
+    "视频配置": "Cấu hình video",
+    "视频生成": "Tạo video",
+    "时长（秒）": "Thời lượng (giây)",
+    "画面比例": "Tỷ lệ khung hình",
+    "分辨率": "Độ phân giải",
+    "生成音频": "Tạo âm thanh",
+    "水印": "Hình mờ",
+    "首帧图片 URL（可选）": "URL ảnh khung đầu (tùy chọn)",
+    "尾帧图片 URL（可选）": "URL ảnh khung cuối (tùy chọn)",
+    "参考视频 URL（可选）": "URL video tham chiếu (tùy chọn)",
+    "参考音频 URL（可选）": "URL âm thanh tham chiếu (tùy chọn)",
+    "生成中...": "Đang tạo...",
+    "生成失败": "Tạo thất bại",
+    "AI 视频生成": "Tạo video AI",
+    "描述你想生成的视频内容...": "Mô tả nội dung video bạn muốn tạo..."
   }
 }

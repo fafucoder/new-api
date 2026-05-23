@@ -385,7 +385,23 @@ func SetApiRouter(router *gin.Engine) {
 		taskRoute := apiRouter.Group("/task")
 		{
 			taskRoute.GET("/self", middleware.UserAuth(), controller.GetUserTask)
+			taskRoute.DELETE("/self/:task_id", middleware.UserAuth(), controller.DeleteUserTask)
 			taskRoute.GET("/", middleware.AdminAuth(), controller.GetAllTask)
+		}
+
+		// Dashboard video playground — session-auth backed alias of /v1/videos.
+		// Lets the React VideoPlayground page submit jobs using the user's
+		// session cookie instead of a user-pasted API token.
+		videoPlaygroundRoute := apiRouter.Group("/v1")
+		videoPlaygroundRoute.Use(middleware.RouteTag("relay"))
+		videoPlaygroundRoute.Use(
+			middleware.UserAuth(),
+			middleware.PlaygroundUserToToken(),
+			middleware.Distribute(),
+		)
+		{
+			videoPlaygroundRoute.POST("/videos", controller.RelayTask)
+			videoPlaygroundRoute.GET("/videos/:task_id", controller.RelayTaskFetch)
 		}
 
 		vendorRoute := apiRouter.Group("/vendors")

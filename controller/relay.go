@@ -577,6 +577,10 @@ func RelayTask(c *gin.Context) {
 		service.LogTaskConsumption(c, relayInfo)
 
 		task := model.InitTask(result.Platform, relayInfo)
+		// 记录用户提示词到 Properties.Input —— 前端历史列表用它显示原始提问。
+		if taskReq, taskReqErr := relaycommon.GetTaskRequest(c); taskReqErr == nil {
+			task.Properties.Input = taskReq.Prompt
+		}
 		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId

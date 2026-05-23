@@ -4397,6 +4397,21 @@
     "🎉 配置完成！": "🎉 Configuration terminée !",
     "充值总额来源": "Source du rechargement",
     "充值记录 (top_ups)": "Enregistrements de recharge (top_ups)",
-    "用户额度 (users)": "Quota utilisateur (users)"
+    "用户额度 (users)": "Quota utilisateur (users)",
+    "视频配置": "Configuration vidéo",
+    "视频生成": "Génération vidéo",
+    "时长（秒）": "Durée (s)",
+    "画面比例": "Format d'image",
+    "分辨率": "Résolution",
+    "生成音频": "Générer l'audio",
+    "水印": "Filigrane",
+    "首帧图片 URL（可选）": "URL image première frame (optionnel)",
+    "尾帧图片 URL（可选）": "URL image dernière frame (optionnel)",
+    "参考视频 URL（可选）": "URL vidéo de référence (optionnel)",
+    "参考音频 URL（可选）": "URL audio de référence (optionnel)",
+    "生成中...": "Génération en cours...",
+    "生成失败": "Échec de la génération",
+    "AI 视频生成": "Génération vidéo IA",
+    "描述你想生成的视频内容...": "Décrivez le contenu vidéo à générer..."
   }
 }

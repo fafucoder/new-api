@@ -69,7 +69,8 @@ const PageLayout = () => {
      location.pathname.startsWith('/invoice') || 
      location.pathname.startsWith('/invoice-admin')) &&
     !location.pathname.startsWith('/console/chat') &&
-    location.pathname !== '/console/playground';
+    location.pathname !== '/console/playground' &&
+    location.pathname !== '/console/video-playground';
 
   const isConsoleRoute = location.pathname.startsWith('/console') || 
       location.pathname.startsWith('/invoice') || 
