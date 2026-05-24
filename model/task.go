@@ -105,6 +105,10 @@ type TaskPrivateData struct {
 	SubscriptionId int                 `json:"subscription_id,omitempty"` // 订阅 ID，用于订阅退款
 	TokenId        int                 `json:"token_id,omitempty"`        // 令牌 ID，用于令牌额度退款
 	BillingContext *TaskBillingContext `json:"billing_context,omitempty"` // 计费参数快照（用于轮询阶段重新计算）
+	// RequestSnapshot 任务提交时的请求参数快照，供 channel adaptor 在轮询/结算阶段使用
+	// （例如 MaaS Seedance 用它在任务完成时本地估算 token）。
+	// 通用字段：由 adaptor 自行决定序列化结构，未设置时为 nil。
+	RequestSnapshot json.RawMessage `json:"request_snapshot,omitempty"`
 }
 
 // TaskBillingContext 记录任务提交时的计费参数，以便轮询阶段可以重新计算额度。
@@ -150,10 +154,23 @@ func (p *TaskPrivateData) Scan(val interface{}) error {
 }
 
 func (p TaskPrivateData) Value() (driver.Value, error) {
-	if (p == TaskPrivateData{}) {
+	if p.isZero() {
 		return nil, nil
 	}
 	return common.Marshal(p)
+}
+
+// isZero 判断 TaskPrivateData 是否为零值。
+// 不能用 `p == TaskPrivateData{}` —— json.RawMessage 是 slice，不可比较。
+func (p TaskPrivateData) isZero() bool {
+	return p.Key == "" &&
+		p.UpstreamTaskID == "" &&
+		p.ResultURL == "" &&
+		p.BillingSource == "" &&
+		p.SubscriptionId == 0 &&
+		p.TokenId == 0 &&
+		p.BillingContext == nil &&
+		len(p.RequestSnapshot) == 0
 }
 
 // SyncTaskQueryParams 用于包含所有搜索条件的结构体，可以根据需求添加更多字段

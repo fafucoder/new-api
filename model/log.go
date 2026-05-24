@@ -295,6 +295,26 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 	}
 }
 
+// UpdateTaskLogCompletionTokens 把任务完成时算出的 token 数回写到
+// 任务提交阶段创建的 consume 日志行的 completion_tokens 列。
+// 通过 user_id + channel_id + type=consume 缩窄范围，再用
+// other LIKE '%"task_id":"<taskID>"%' 精确匹配（GORM 的 LIKE 在 SQLite/MySQL/PostgreSQL 上都通用）。
+// 返回受影响行数；taskID 为空或 tokens<=0 时直接返回 (0, nil)。
+func UpdateTaskLogCompletionTokens(userId int, channelId int, taskID string, completionTokens int) (int64, error) {
+	if taskID == "" || completionTokens <= 0 {
+		return 0, nil
+	}
+	pattern := fmt.Sprintf(`%%"task_id":"%s"%%`, taskID)
+	res := LOG_DB.Model(&Log{}).
+		Where("user_id = ? AND channel_id = ? AND type = ? AND other LIKE ?",
+			userId, channelId, LogTypeConsume, pattern).
+		Updates(map[string]interface{}{"completion_tokens": completionTokens})
+	if res.Error != nil {
+		return 0, res.Error
+	}
+	return res.RowsAffected, nil
+}
+
 func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string, startIdx int, num int, channel int, group string, requestId string) (logs []*Log, total int64, err error) {
 	var tx *gorm.DB
 	if logType == LogTypeUnknown {

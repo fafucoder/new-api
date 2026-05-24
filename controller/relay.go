@@ -582,6 +582,14 @@ func RelayTask(c *gin.Context) {
 			task.Properties.Input = taskReq.Prompt
 		}
 		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
+		// 通用扩展点：adaptor 可在 BuildRequestBody 阶段通过 c.Set("task_request_snapshot", []byte{...})
+		// 将请求参数快照写入 task.PrivateData.RequestSnapshot，供轮询/结算阶段使用。
+		// 其他 channel 不设置时此字段为 nil，无副作用。
+		if snap, exists := c.Get("task_request_snapshot"); exists {
+			if b, ok := snap.([]byte); ok && len(b) > 0 {
+				task.PrivateData.RequestSnapshot = b
+			}
+		}
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
 		task.PrivateData.TokenId = relayInfo.TokenId

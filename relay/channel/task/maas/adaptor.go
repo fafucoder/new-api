@@ -104,7 +104,16 @@ type responseTask struct {
 	Content struct {
 		VideoURL string `json:"video_url"`
 	} `json:"content"`
-	Error struct {
+	// 上游若回显 usage（当前实测不返回，预留兼容）
+	Usage struct {
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
+	// 上游若回显请求参数（本地估算 token 时优先采信）
+	Resolution string `json:"resolution,omitempty"`
+	Ratio      string `json:"ratio,omitempty"`
+	Duration   int    `json:"duration,omitempty"`
+	Error      struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
@@ -161,11 +170,31 @@ func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayIn
 	// store plain body for secure channel encryption in DoRequest
 	c.Set("maas_plain_body", data)
 
-	if hasVideoInput(body.Content) {
+	hasVideo := hasVideoInput(body.Content)
+	if hasVideo {
 		c.Set("maas_has_video", true)
 	}
 
+	// 持久化请求参数快照到 task.PrivateData.RequestSnapshot，供任务完成时本地估算 token。
+	snap, snapErr := encodeRequestSnapshot(requestSnapshot{
+		Resolution:    body.Resolution,
+		Ratio:         body.Ratio,
+		Duration:      derefInt(body.Duration),
+		HasVideoInput: hasVideo,
+	})
+	if snapErr == nil {
+		c.Set("task_request_snapshot", snap)
+	}
+
 	return bytes.NewReader(data), nil
+}
+
+// derefInt 安全解引用 *int；nil 返回 0。
+func derefInt(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
 }
 
 // DoRequest overrides the default to apply jeddak secure channel encryption.
@@ -330,6 +359,11 @@ func (a *TaskAdaptor) ParseTaskResult(respBody []byte) (*relaycommon.TaskInfo, e
 		taskResult.Status = model.TaskStatusSuccess
 		taskResult.Progress = taskcommon.ProgressComplete
 		taskResult.Url = resTask.Content.VideoURL
+		// 仅在上游回显非零 usage 时采信；否则留给 AdjustBillingOnComplete 本地估算。
+		if resTask.Usage.TotalTokens > 0 {
+			taskResult.CompletionTokens = resTask.Usage.CompletionTokens
+			taskResult.TotalTokens = resTask.Usage.TotalTokens
+		}
 	case "failed":
 		taskResult.Status = model.TaskStatusFailure
 		taskResult.Progress = taskcommon.ProgressComplete
@@ -368,6 +402,52 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 
 func (a *TaskAdaptor) GetModelList() []string { return ModelList }
 func (a *TaskAdaptor) GetChannelName() string  { return ChannelName }
+
+// AdjustBillingOnComplete 在任务到达终态时被 settle 逻辑调用。
+// 上游 MaaS Seedance 不会返回 usage 字段，这里按火山官方公式本地估算 token：
+//
+//	tokens = ceil(width × height × 24 × duration / 1024)
+//	无视频输入场景再 × 1.6429
+//
+// 设置到 taskResult.TotalTokens 后返回 0，让通用 fallback 走"按 token 重算"路径。
+// 已有 TotalTokens（上游回显或先前估算）则不覆盖。
+func (a *TaskAdaptor) AdjustBillingOnComplete(task *model.Task, taskResult *relaycommon.TaskInfo) int {
+	if taskResult == nil || taskResult.Status != model.TaskStatusSuccess {
+		return 0
+	}
+	if taskResult.TotalTokens > 0 {
+		return 0
+	}
+
+	// 1. 优先采信上游回显的请求参数（task.Data 在轮询时被覆盖为最新响应）
+	var fromResp responseTask
+	_ = common.Unmarshal(task.Data, &fromResp)
+
+	// 2. 兜底读 BuildRequestBody 阶段持久化的快照
+	snap, _ := decodeRequestSnapshot(task.PrivateData.RequestSnapshot)
+
+	resolution := firstNonEmpty(fromResp.Resolution, snap.Resolution)
+	ratio := firstNonEmpty(fromResp.Ratio, snap.Ratio)
+	duration := fromResp.Duration
+	if duration <= 0 {
+		duration = snap.Duration
+	}
+
+	tokens := estimateSeedanceTokens(resolution, ratio, duration, snap.HasVideoInput)
+	if tokens <= 0 {
+		return 0
+	}
+	taskResult.TotalTokens = tokens
+	taskResult.CompletionTokens = tokens
+	return 0
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
 
 func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, resolvedEndpoint string) *requestPayload {
 	r := &requestPayload{

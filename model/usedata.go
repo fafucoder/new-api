@@ -101,6 +101,35 @@ func increaseQuotaData(userId int, username string, modelName string, count int,
 	}
 }
 
+// IncreaseQuotaDataTokenUsed 仅对 token_used 做差额增量更新。
+// 用于异步任务（提交时 token=0，完成后补回真实 token）；不修改 count / quota。
+// 优先更新内存缓存（CacheQuotaData），缓存未命中再走 DB 直接 UPDATE。
+// 若 DB 中也没有对应小时桶（极少见，例如缓存还没初次落库），则直接忽略——
+// 等下次 SaveQuotaDataCache 落库时数据自然会带上正确值。
+func IncreaseQuotaDataTokenUsed(userId int, username string, modelName string, submitAt int64, tokenDelta int) {
+	if !common.DataExportEnabled || tokenDelta == 0 {
+		return
+	}
+	createdAt := submitAt - (submitAt % 3600)
+	key := fmt.Sprintf("%d-%s-%s-%d", userId, username, modelName, createdAt)
+
+	CacheQuotaDataLock.Lock()
+	if qd, ok := CacheQuotaData[key]; ok {
+		qd.TokenUsed += tokenDelta
+		CacheQuotaDataLock.Unlock()
+		return
+	}
+	CacheQuotaDataLock.Unlock()
+
+	err := DB.Table("quota_data").
+		Where("user_id = ? and username = ? and model_name = ? and created_at = ?",
+			userId, username, modelName, createdAt).
+		Update("token_used", gorm.Expr("token_used + ?", tokenDelta)).Error
+	if err != nil {
+		common.SysLog(fmt.Sprintf("IncreaseQuotaDataTokenUsed error: %s", err))
+	}
+}
+
 func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
 	// 从quota_data表中查询数据

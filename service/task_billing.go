@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -13,6 +14,15 @@ import (
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/gin-gonic/gin"
 )
+
+// taskTokenWritebackPlatforms 平台白名单：任务完成后把本地估算的 token 数
+// 回写到原 log 行的 completion_tokens 列，让统计页面正确显示消耗。
+// 不在此名单内的平台保持原行为（log 行 tokens=0，但 quota 计费仍走 RecalculateTaskQuotaByTokens）。
+// 需要新增平台时在此追加。
+var taskTokenWritebackPlatforms = map[constant.TaskPlatform]bool{
+	// MaaS Seedance 2.0 文生视频：上游不返回 usage，由 adaptor 本地按火山公式估算 token。
+	constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeMaasSeedance)): true,
+}
 
 // LogTaskConsumption 记录任务消费日志和统计信息（仅记录，不涉及实际扣费）。
 // 实际扣费已由 BillingSession（PreConsumeBilling + SettleBilling）完成。
@@ -38,6 +48,10 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	other := make(map[string]interface{})
 	other["is_task"] = true
 	other["request_path"] = c.Request.URL.Path
+	// 记录 task_id 用于任务完成时回写 token 列（RecalculateTaskQuotaByTokens 会用到）
+	if info.TaskRelayInfo != nil && info.TaskRelayInfo.PublicTaskID != "" {
+		other["task_id"] = info.TaskRelayInfo.PublicTaskID
+	}
 	other["model_price"] = info.PriceData.ModelPrice
 	if info.PriceData.ModelRatio > 0 {
 		other["model_ratio"] = info.PriceData.ModelRatio
@@ -298,4 +312,20 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 
 	reason := fmt.Sprintf("token重算：tokens=%d, modelRatio=%.2f, groupRatio=%.2f, otherMultiplier=%.4f", totalTokens, modelRatio, finalGroupRatio, otherMultiplier)
 	RecalculateTaskQuota(ctx, task, actualQuota, reason)
+
+	// 白名单平台：把本地估算的 token 数回写到原 consume 日志行的 completion_tokens 列，
+	// 让统计页面能正确显示消耗 token 数（quota 计费已由上一步处理）。
+	if taskTokenWritebackPlatforms[task.Platform] {
+		rows, err := model.UpdateTaskLogCompletionTokens(task.UserId, task.ChannelId, task.TaskID, totalTokens)
+		if err != nil {
+			logger.LogWarn(ctx, fmt.Sprintf("回写任务日志 completion_tokens 失败 task=%s: %s", task.TaskID, err.Error()))
+		} else if rows == 0 {
+			logger.LogWarn(ctx, fmt.Sprintf("回写任务日志 completion_tokens 未命中 task=%s", task.TaskID))
+		}
+		// 同步补一份到仪表盘聚合表 quota_data（按 SubmitTime 的小时桶）。
+		// 提交时 LogQuotaData 已经写过 tokenUsed=0，这里按差额补 totalTokens。
+		if username, uerr := model.GetUsernameById(task.UserId, false); uerr == nil {
+			model.IncreaseQuotaDataTokenUsed(task.UserId, username, taskModelName(task), task.SubmitTime, totalTokens)
+		}
+	}
 }
