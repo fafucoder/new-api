@@ -99,7 +99,7 @@ const ModelPricingTable = ({
     const isDynamic = modelData?.billing_mode === 'tiered_expr';
 
     // 动态计费时始终显示倍率列，否则根据设置
-    if (showRatio || isDynamic) {
+    if (isDynamic) {
       columns.push({
         title: t('分组倍率'),
         dataIndex: 'ratio',
@@ -123,32 +123,6 @@ const ModelPricingTable = ({
           <Tag color={color} size='small' shape='circle'>
             {text || '-'}
           </Tag>
-        );
-      },
-    });
-
-    columns.push({
-      title: siteDisplayType === 'TOKENS' ? t('计费摘要') : t('价格摘要'),
-      dataIndex: 'priceItems',
-      render: (items) => {
-        if (items.length === 1 && items[0].isDynamic) {
-          return (
-            <Text type='tertiary' size='small'>
-              {t('见上方动态计费详情')}
-            </Text>
-          );
-        }
-        return (
-          <div className='space-y-1'>
-            {items.map((item) => (
-              <div key={item.key}>
-                <div className='font-semibold text-orange-600'>
-                  {item.label} {item.value}
-                </div>
-                <div className='text-xs text-gray-500'>{item.suffix}</div>
-              </div>
-            ))}
-          </div>
         );
       },
     });

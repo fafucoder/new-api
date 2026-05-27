@@ -27,22 +27,24 @@ func GetUserGroups(c *gin.Context) {
 	usableGroups := make(map[string]map[string]interface{})
 	userGroup := ""
 	userId := c.GetInt("id")
+	isAdmin := c.GetInt("role") >= 10
 	userGroup, _ = model.GetUserGroup(userId, false)
-	userUsableGroups := service.GetUserUsableGroups(userGroup)
-	for groupName, _ := range ratio_setting.GetGroupRatioCopy() {
-		// UserUsableGroups contains the groups that the user can use
+	userUsableGroups := service.GetUserSelectableGroups(userGroup)
+	for groupName := range ratio_setting.GetGroupRatioCopy() {
 		if desc, ok := userUsableGroups[groupName]; ok {
-			usableGroups[groupName] = map[string]interface{}{
-				"ratio": service.GetUserGroupRatio(userGroup, groupName),
-				"desc":  desc,
+			info := map[string]interface{}{"desc": desc}
+			if isAdmin {
+				info["ratio"] = service.GetUserGroupRatio(userGroup, groupName)
 			}
+			usableGroups[groupName] = info
 		}
 	}
 	if _, ok := userUsableGroups["auto"]; ok {
-		usableGroups["auto"] = map[string]interface{}{
-			"ratio": "自动",
-			"desc":  setting.GetUsableGroupDescription("auto"),
+		info := map[string]interface{}{"desc": setting.GetUsableGroupDescription("auto")}
+		if isAdmin {
+			info["ratio"] = "自动"
 		}
+		usableGroups["auto"] = info
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

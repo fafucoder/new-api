@@ -291,16 +291,6 @@ export const useModelPricingData = () => {
   const handleGroupClick = (group) => {
     setSelectedGroup(group);
     setFilterGroup(group);
-    if (group === 'all') {
-      showInfo(t('已切换至最优倍率视图，每个模型使用其最低倍率分组'));
-    } else {
-      showInfo(
-        t('当前查看的分组为：{{group}}，倍率为：{{ratio}}', {
-          group: group,
-          ratio: groupRatio[group] ?? 1,
-        }),
-      );
-    }
   };
 
   const openModelDetail = (model) => {
