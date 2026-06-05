@@ -2,9 +2,9 @@ package service
 
 import (
 	"errors"
-
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
@@ -115,7 +115,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			}
 			logger.LogDebug(param.Ctx, "Auto selecting group: %s, priorityRetry: %d", autoGroup, priorityRetry)
 
-			channel, _ = model.GetRandomSatisfiedChannel(autoGroup, param.ModelName, priorityRetry)
+			channel, _ = getRandomSatisfiedChannelWith4KFilter(param.Ctx, autoGroup, param.ModelName, priorityRetry)
 			if channel == nil {
 				// Current group has no available channel for this model, try next group
 				// 当前分组没有该模型的可用渠道，尝试下一个分组
@@ -153,10 +153,55 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 			break
 		}
 	} else {
-		channel, err = model.GetRandomSatisfiedChannel(param.TokenGroup, param.ModelName, param.GetRetry())
+		channel, err = getRandomSatisfiedChannelWith4KFilter(param.Ctx, param.TokenGroup, param.ModelName, param.GetRetry())
 		if err != nil {
 			return nil, param.TokenGroup, err
 		}
 	}
 	return channel, selectGroup, nil
+}
+
+// getRandomSatisfiedChannelWith4KFilter 获取满足4K要求的随机渠道
+// 通过过滤函数预先筛选渠道池，不浪费retry次数
+func getRandomSatisfiedChannelWith4KFilter(ctx *gin.Context, group string, modelName string, retry int) (*model.Channel, error) {
+	require4K, ok := common.GetContextKeyType[bool](ctx, constant.ContextKeyRequire4K)
+	if !ok {
+		return model.GetRandomSatisfiedChannel(group, modelName, retry)
+	}
+
+	// 创建过滤函数
+	filter := func(channel *model.Channel) bool {
+		settings := parseChannelSettings(channel.Setting)
+		// 如果渠道未配置setting，默认支持所有尺寸
+		if channel.Setting == nil || *channel.Setting == "" {
+			return true
+		}
+		// 如果需要4K，只返回支持4K的渠道
+		if require4K {
+			return settings.Support4K
+		}
+		// 如果不需要4K，返回所有渠道（包括支持4K的）
+		return true
+	}
+
+	channel, err := model.GetRandomSatisfiedChannelWithFilter(group, modelName, retry, filter)
+	if channel == nil {
+		return model.GetRandomSatisfiedChannel(group, modelName, retry)
+	}
+
+	return channel, err
+}
+
+// parseChannelSettings 从渠道的 Setting JSON 字段解析 ChannelSettings
+func parseChannelSettings(settingJSON *string) *dto.ChannelSettings {
+	if settingJSON == nil || *settingJSON == "" {
+		return &dto.ChannelSettings{}
+	}
+
+	var settings dto.ChannelSettings
+	err := common.UnmarshalJsonStr(*settingJSON, &settings)
+	if err != nil {
+		return &dto.ChannelSettings{}
+	}
+	return &settings
 }

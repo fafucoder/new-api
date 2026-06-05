@@ -190,6 +190,110 @@ func GetRandomSatisfiedChannel(group string, model string, retry int) (*Channel,
 	return nil, errors.New("channel not found")
 }
 
+// GetRandomSatisfiedChannelWithFilter 获取满足条件的随机渠道（支持过滤函数）
+func GetRandomSatisfiedChannelWithFilter(group string, model string, retry int, filter func(*Channel) bool) (*Channel, error) {
+	// if memory cache is disabled, get channel directly from database
+	if !common.MemoryCacheEnabled {
+		channel, err := GetChannel(group, model, retry)
+		if err != nil || channel == nil {
+			return channel, err
+		}
+		if filter != nil && !filter(channel) {
+			return nil, nil
+		}
+		return channel, nil
+	}
+
+	channelSyncLock.RLock()
+	defer channelSyncLock.RUnlock()
+
+	// First, try to find channels with the exact model name.
+	channels := group2model2channels[group][model]
+
+	// If no channels found, try to find channels with the normalized model name.
+	if len(channels) == 0 {
+		normalizedModel := ratio_setting.FormatMatchingModelName(model)
+		channels = group2model2channels[group][normalizedModel]
+	}
+
+	if len(channels) == 0 {
+		return nil, nil
+	}
+
+	// Build channel list and apply filter
+	var allChannels []*Channel
+	for _, channelId := range channels {
+		if channel, ok := channelsIDM[channelId]; ok {
+			if filter == nil || filter(channel) {
+				allChannels = append(allChannels, channel)
+			}
+		} else {
+			return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channelId)
+		}
+	}
+
+	if len(allChannels) == 0 {
+		return nil, nil // No channels pass the filter
+	}
+
+	if len(allChannels) == 1 {
+		return allChannels[0], nil
+	}
+
+	uniquePriorities := make(map[int]bool)
+	for _, channel := range allChannels {
+		uniquePriorities[int(channel.GetPriority())] = true
+	}
+
+	var sortedUniquePriorities []int
+	for priority := range uniquePriorities {
+		sortedUniquePriorities = append(sortedUniquePriorities, priority)
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(sortedUniquePriorities)))
+
+	if retry >= len(uniquePriorities) {
+		retry = len(uniquePriorities) - 1
+	}
+	targetPriority := int64(sortedUniquePriorities[retry])
+
+	// get the priority for the given retry number
+	var sumWeight = 0
+	var targetChannels []*Channel
+	for _, channel := range allChannels {
+		if channel.GetPriority() == targetPriority {
+			sumWeight += channel.GetWeight()
+			targetChannels = append(targetChannels, channel)
+		}
+	}
+
+	if len(targetChannels) == 0 {
+		return nil, errors.New(fmt.Sprintf("no channel found, group: %s, model: %s, priority: %d", group, model, targetPriority))
+	}
+
+	// smoothing factor and adjustment
+	smoothingFactor := 1
+	smoothingAdjustment := 0
+
+	if sumWeight == 0 {
+		sumWeight = len(targetChannels) * 100
+		smoothingAdjustment = 100
+	} else if sumWeight/len(targetChannels) < 10 {
+		smoothingFactor = 100
+	}
+
+	totalWeight := sumWeight * smoothingFactor
+	randomWeight := rand.Intn(totalWeight)
+
+	for _, channel := range targetChannels {
+		randomWeight -= channel.GetWeight()*smoothingFactor + smoothingAdjustment
+		if randomWeight < 0 {
+			return channel, nil
+		}
+	}
+
+	return nil, errors.New("channel not found")
+}
+
 func CacheGetChannel(id int) (*Channel, error) {
 	if !common.MemoryCacheEnabled {
 		return GetChannelById(id, true)

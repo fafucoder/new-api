@@ -8,6 +8,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/config"
+	"github.com/QuantumNous/new-api/setting/image_size_setting"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/setting/performance_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -583,6 +584,13 @@ func handleConfigUpdate(key, value string) bool {
 		ratio_setting.InvalidateExposedDataCache()
 	} else if configName == "theme" {
 		system_setting.UpdateAndSyncTheme()
+	} else if configName == "image_size_setting" {
+		// image_size_setting 使用 mutex 保护全局变量，
+		// UpdateConfigFromMap 的反射修改绕过了 mutex，
+		// 需要通过 UpdateSetting 重新写入以确保线程安全和内存同步
+		if setting, ok := cfg.(*image_size_setting.ImageSizeSetting); ok {
+			image_size_setting.UpdateSetting(*setting)
+		}
 	}
 
 	return true // 已处理

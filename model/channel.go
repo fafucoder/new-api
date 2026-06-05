@@ -78,6 +78,7 @@ var channelSortColumns = map[string]string{
 	"id":            "id",
 	"name":          "name",
 	"priority":      "priority",
+	"weight":        "weight",
 	"balance":       "balance",
 	"response_time": "response_time",
 	"test_time":     "test_time",

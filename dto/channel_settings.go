@@ -8,6 +8,7 @@ type ChannelSettings struct {
 	SystemPrompt           string `json:"system_prompt,omitempty"`
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
 	DisableProbe           bool   `json:"disable_probe,omitempty"` // 跳过批量探测/可用性测试
+	Support4K              bool   `json:"support_4k,omitempty"`    // 是否支持4K图片生成
 }
 
 type VertexKeyType string

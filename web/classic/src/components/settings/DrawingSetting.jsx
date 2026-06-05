@@ -20,6 +20,7 @@ For commercial licensing, please contact support@quantumnous.com
 import React, { useEffect, useState } from 'react';
 import { Card, Spin } from '@douyinfe/semi-ui';
 import SettingsDrawing from '../../pages/Setting/Drawing/SettingsDrawing';
+import ImageSizeSetting from './ImageSizeSetting';
 import { API, showError, toBoolean } from '../../helpers';
 
 const DrawingSetting = () => {
@@ -76,6 +77,8 @@ const DrawingSetting = () => {
         <Card style={{ marginTop: '10px' }}>
           <SettingsDrawing options={inputs} refresh={onRefresh} />
         </Card>
+        {/* 图片尺寸设置 */}
+        <ImageSizeSetting />
       </Spin>
     </>
   );

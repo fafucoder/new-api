@@ -40,6 +40,7 @@ const ChannelsTable = (channelsData) => {
     setSelectedChannels,
     handlePageChange,
     handlePageSizeChange,
+    handleTableChange,
     handleRow,
     t,
     COLUMN_KEYS,
@@ -148,6 +149,7 @@ const ChannelsTable = (channelsData) => {
       hidePagination={true}
       expandAllRows={false}
       onRow={handleRow}
+      onChange={handleTableChange}
       rowSelection={
         enableBatchDelete
           ? {
