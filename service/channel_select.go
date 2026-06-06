@@ -180,8 +180,8 @@ func getRandomSatisfiedChannelWith4KFilter(ctx *gin.Context, group string, model
 		if require4K {
 			return settings.Support4K
 		}
-		// 如果不需要4K，返回所有渠道（包括支持4K的）
-		return true
+		// 如果不需要4K，排除4K专用渠道
+		return !settings.Support4K
 	}
 
 	channel, err := model.GetRandomSatisfiedChannelWithFilter(group, modelName, retry, filter)
