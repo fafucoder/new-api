@@ -27,6 +27,7 @@ const (
 	ContextKeyChannelBaseUrl           ContextKey = "base_url"
 	ContextKeyChannelType              ContextKey = "channel_type"
 	ContextKeyChannelSetting           ContextKey = "channel_setting"
+	ContextKeyRequire4K                ContextKey = "require_4k"
 	ContextKeyChannelOtherSetting      ContextKey = "channel_other_setting"
 	ContextKeyChannelParamOverride     ContextKey = "param_override"
 	ContextKeyChannelHeaderOverride    ContextKey = "header_override"

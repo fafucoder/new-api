@@ -196,6 +196,7 @@ const EditChannelModal = (props) => {
     system_prompt: '',
     system_prompt_override: false,
     disable_probe: false,
+    support_4k: false,
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -519,6 +520,7 @@ const EditChannelModal = (props) => {
     pass_through_body_enabled: false,
     system_prompt: '',
     disable_probe: false,
+    support_4k: false,
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -873,6 +875,7 @@ const EditChannelModal = (props) => {
           data.system_prompt_override =
             parsedSettings.system_prompt_override || false;
           data.disable_probe = parsedSettings.disable_probe || false;
+          data.support_4k = parsedSettings.support_4k || false;
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -882,6 +885,7 @@ const EditChannelModal = (props) => {
           data.system_prompt = '';
           data.system_prompt_override = false;
           data.disable_probe = false;
+          data.support_4k = false;
         }
       } else {
         data.force_format = false;
@@ -891,6 +895,7 @@ const EditChannelModal = (props) => {
         data.system_prompt = '';
         data.system_prompt_override = false;
         data.disable_probe = false;
+        data.support_4k = false;
       }
 
       if (data.settings) {
@@ -1392,6 +1397,7 @@ const EditChannelModal = (props) => {
       system_prompt: '',
       system_prompt_override: false,
       disable_probe: false,
+      support_4k: false,
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1763,6 +1769,7 @@ const EditChannelModal = (props) => {
       system_prompt: localInputs.system_prompt || '',
       system_prompt_override: localInputs.system_prompt_override || false,
       disable_probe: localInputs.disable_probe || false,
+      support_4k: localInputs.support_4k || false,
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -1844,6 +1851,8 @@ const EditChannelModal = (props) => {
     delete localInputs.pass_through_body_enabled;
     delete localInputs.system_prompt;
     delete localInputs.system_prompt_override;
+    delete localInputs.disable_probe;
+    delete localInputs.support_4k;
     delete localInputs.is_enterprise_account;
     // 顶层的 vertex_key_type 不应发送给后端
     delete localInputs.vertex_key_type;
@@ -2535,6 +2544,7 @@ const EditChannelModal = (props) => {
                   <Form.Switch field='thinking_to_content' label={t('思考内容转换')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('thinking_to_content', value)} extraText={t('将 reasoning_content 转换为 <think> 标签拼接到内容中')} />
                   <Form.Switch field='pass_through_body_enabled' label={t('透传请求体')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('pass_through_body_enabled', value)} extraText={t('启用请求体透传功能')} />
                   <Form.Switch field='disable_probe' label={t('禁用探测')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('disable_probe', value)} extraText={t('开启后,批量"测试所有通道"和定时可用性探测将跳过此渠道')} />
+                  <Form.Switch field='support_4k' label={t('渠道是否支持4K图片生成')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('support_4k', value)} extraText={t('勾选后，该渠道可处理高分辨率图片生成请求（根据系统设置的尺寸阈值判断）')} />
 
                   <Form.Input field='proxy' label={t('代理地址')} placeholder={t('例如: socks5://user:pass@host:port')} onChange={(value) => handleChannelSettingsChange('proxy', value)} showClear extraText={t('用于配置网络代理，支持 socks5 协议')} />
 

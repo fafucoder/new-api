@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/image_size_setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 
@@ -25,6 +26,22 @@ import (
 type ModelRequest struct {
 	Model string `json:"model"`
 	Group string `json:"group,omitempty"`
+	Size  string `json:"size,omitempty"`
+}
+
+// parseImageSize 解析尺寸字符串 "1024x1024" -> (1024, 1024)
+func parseImageSize(size string) (int, int) {
+	size = strings.TrimSpace(strings.ToLower(size))
+	parts := strings.Split(size, "x")
+	if len(parts) != 2 {
+		return 0, 0
+	}
+	width, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	height, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil || width <= 0 || height <= 0 {
+		return 0, 0
+	}
+	return width, height
 }
 
 func Distribute() func(c *gin.Context) {
@@ -293,6 +310,18 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 	}
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/images/generations") {
 		modelRequest.Model = common.GetStringIfEmpty(modelRequest.Model, "dall-e")
+
+		// 解析图片尺寸，判断是否需要4K渠道
+		isHighRes := true
+		req, err := getModelFromRequest(c)
+		if err == nil && req.Size != "" {
+			width, height := parseImageSize(req.Size)
+			if width > 0 && height > 0 {
+				isHighRes = image_size_setting.IsHighResolution(width, height)
+			}
+		}
+
+		common.SetContextKey(c, constant.ContextKeyRequire4K, isHighRes)
 	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/images/edits") {
 		//modelRequest.Model = common.GetStringIfEmpty(c.PostForm("model"), "gpt-image-1")
 		contentType := c.ContentType()

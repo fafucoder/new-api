@@ -121,6 +121,8 @@ export const useChannelsData = () => {
   // Refs
   const requestCounter = useRef(0);
   const allSelectingRef = useRef(false);
+  // 后端排序状态：sortBy 为 '' 时不传 sort_by/sort_order，后端走默认顺序
+  const sortRef = useRef({ sortBy: '', sortOrder: '' });
   const [formApi, setFormApi] = useState(null);
 
   const formInitValues = {
@@ -348,8 +350,12 @@ export const useChannelsData = () => {
     setLoading(true);
     const typeParam = typeKey !== 'all' ? `&type=${typeKey}` : '';
     const statusParam = statusF !== 'all' ? `&status=${statusF}` : '';
+    const { sortBy, sortOrder } = sortRef.current;
+    const sortParam = sortBy
+      ? `&sort_by=${sortBy}&sort_order=${sortOrder}`
+      : '';
     const res = await API.get(
-      `/api/channel/?p=${page}&page_size=${pageSize}&id_sort=${idSort}&tag_mode=${enableTagMode}${typeParam}${statusParam}`,
+      `/api/channel/?p=${page}&page_size=${pageSize}&id_sort=${idSort}&tag_mode=${enableTagMode}${typeParam}${statusParam}${sortParam}`,
     );
 
     if (res === undefined || reqId !== requestCounter.current) {
@@ -400,8 +406,12 @@ export const useChannelsData = () => {
 
       const typeParam = typeKey !== 'all' ? `&type=${typeKey}` : '';
       const statusParam = statusF !== 'all' ? `&status=${statusF}` : '';
+      const { sortBy, sortOrder } = sortRef.current;
+      const sortParam = sortBy
+        ? `&sort_by=${sortBy}&sort_order=${sortOrder}`
+        : '';
       const res = await API.get(
-        `/api/channel/search?keyword=${searchKeyword}&group=${searchGroup}&model=${searchModel}&id_sort=${sortFlag}&tag_mode=${enableTagMode}&p=${page}&page_size=${pageSz}${typeParam}${statusParam}`,
+        `/api/channel/search?keyword=${searchKeyword}&group=${searchGroup}&model=${searchModel}&id_sort=${sortFlag}&tag_mode=${enableTagMode}&p=${page}&page_size=${pageSz}${typeParam}${statusParam}${sortParam}`,
       );
       const { success, message, data } = res.data;
       if (success) {
@@ -522,6 +532,46 @@ export const useChannelsData = () => {
       setChannels(newChannels);
     } else {
       showError(message);
+    }
+  };
+
+  // Semi Table onChange 签名为 (changeInfo) => void，
+  // changeInfo.sorter 形如 { dataIndex, sortOrder: 'ascend' | 'descend' | false, ... }
+  const handleTableChange = (changeInfo) => {
+    const sorter = changeInfo?.sorter;
+    const dataIndex = sorter?.dataIndex || '';
+    const allowed = new Set(['priority', 'weight']);
+    let sortBy = '';
+    let sortOrder = '';
+    if (
+      allowed.has(dataIndex) &&
+      (sorter?.sortOrder === 'ascend' || sorter?.sortOrder === 'descend')
+    ) {
+      sortBy = dataIndex;
+      sortOrder = sorter.sortOrder === 'ascend' ? 'asc' : 'desc';
+    }
+    if (
+      sortRef.current.sortBy === sortBy &&
+      sortRef.current.sortOrder === sortOrder
+    ) {
+      return;
+    }
+    sortRef.current = { sortBy, sortOrder };
+    setActivePage(1);
+    const { searchKeyword, searchGroup, searchModel } = getFormValues();
+    if (searchKeyword === '' && searchGroup === '' && searchModel === '') {
+      loadChannels(1, pageSize, idSort, enableTagMode).catch((reason) => {
+        showError(reason);
+      });
+    } else {
+      searchChannels(
+        enableTagMode,
+        activeTypeKey,
+        statusFilter,
+        1,
+        pageSize,
+        idSort,
+      );
     }
   };
 
@@ -1231,6 +1281,7 @@ export const useChannelsData = () => {
     manageTag,
     handlePageChange,
     handlePageSizeChange,
+    handleTableChange,
     copySelectedChannel,
     updateChannelProperty,
     submitTagEdit,

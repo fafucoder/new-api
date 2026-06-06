@@ -339,6 +339,7 @@ export const getChannelsColumns = ({
       key: COLUMN_KEYS.NAME,
       title: t('名称'),
       dataIndex: 'name',
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
       render: (text, record, index) => {
         const passThroughEnabled = isRequestPassThroughEnabled(record);
         const upstreamUpdateMeta = getUpstreamUpdateMeta(record);
@@ -577,6 +578,7 @@ export const getChannelsColumns = ({
       key: COLUMN_KEYS.PRIORITY,
       title: t('优先级'),
       dataIndex: 'priority',
+      sorter: true,
       render: (text, record, index) => {
         if (record.children === undefined) {
           return (
@@ -632,6 +634,7 @@ export const getChannelsColumns = ({
       key: COLUMN_KEYS.WEIGHT,
       title: t('权重'),
       dataIndex: 'weight',
+      sorter: true,
       render: (text, record, index) => {
         if (record.children === undefined) {
           return (
