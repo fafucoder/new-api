@@ -64,10 +64,15 @@ function ErrorRateAlertPage() {
 
   const loadChannels = async () => {
     try {
-      const res = await API.get('/api/channel/');
+      const res = await API.get('/api/channel/?p=0&p_size=1000');
       const { success, data } = res.data;
       if (success) {
-        setChannels(data || []);
+        const list = Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data)
+            ? data
+            : [];
+        setChannels(list.filter((ch) => ch && ch.status !== 2));
       }
     } catch (error) {
       console.error('Failed to load channels:', error);
