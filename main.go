@@ -121,6 +121,10 @@ func main() {
 	// balance drops below threshold.
 	go service.AutomaticallyAlertBalance()
 
+	// Periodically scan error rate alert rules and notify when error
+	// rate exceeds threshold.
+	go service.AutomaticallyAlertErrorRate()
+
 	// Codex credential auto-refresh check every 10 minutes, refresh when expires within 1 day
 	service.StartCodexCredentialAutoRefreshTask()
 

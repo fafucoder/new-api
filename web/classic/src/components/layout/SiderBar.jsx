@@ -55,6 +55,7 @@ const routerMap = {
   cacheHitStats: '/console/cache-hit-stats',
   channelValidation: '/console/channel-validation',
   balanceAlert: '/console/balanceAlert',
+  errorRateAlert: '/console/errorRateAlert',
   invoice: '/invoice',
   invoiceAdmin: '/invoice-admin',
 };
@@ -210,6 +211,12 @@ const SiderBar = ({ onNavigate = () => {} }) => {
         text: t('余额监控'),
         itemKey: 'balanceAlert',
         to: '/console/balanceAlert',
+        className: isAdmin() ? '' : 'tableHiddle',
+      },
+      {
+        text: t('错误监控'),
+        itemKey: 'errorRateAlert',
+        to: '/console/errorRateAlert',
         className: isAdmin() ? '' : 'tableHiddle',
       },
       {

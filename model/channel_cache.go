@@ -42,6 +42,10 @@ func InitChannelCache() {
 		if channel.Status != common.ChannelStatusEnabled {
 			continue // skip disabled channels
 		}
+		// 跳过兜底渠道，兜底渠道不参与常规请求
+		if channel.IsFallback != nil && *channel.IsFallback {
+			continue // skip fallback channels
+		}
 		groups := strings.Split(channel.Group, ",")
 		for _, group := range groups {
 			models := strings.Split(channel.Models, ",")

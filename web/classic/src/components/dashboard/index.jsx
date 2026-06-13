@@ -29,6 +29,7 @@ import ApiInfoPanel from './ApiInfoPanel';
 import AnnouncementsPanel from './AnnouncementsPanel';
 import FaqPanel from './FaqPanel';
 import UptimePanel from './UptimePanel';
+import ErrorRatePanel from './ErrorRatePanel';
 import SearchModal from './modals/SearchModal';
 
 import { useDashboardData } from '../../hooks/dashboard/useDashboardData';
@@ -217,6 +218,16 @@ const Dashboard = () => {
             />
           )}
         </div>
+      </div>
+
+      {/* 错误率统计面板 */}
+      <div className='mb-4'>
+        <ErrorRatePanel
+          CARD_PROPS={CARD_PROPS}
+          CHART_CONFIG={CHART_CONFIG}
+          FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
+          t={dashboardData.t}
+        />
       </div>
 
       {/* 系统公告和常见问答卡片 */}

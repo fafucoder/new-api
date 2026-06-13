@@ -138,3 +138,5 @@ When working on tiered/dynamic billing (expression-based pricing), you MUST read
 
 # Rule 8: Code Style — Follow Go's Official Style Guide
 - 要求用中文回答问题
+- web目录下只需要需要classic目录的内容,不用修改  default 目录的内容
+- 写完后代码不要填写任何 git cmmmit, 我自己写 commit

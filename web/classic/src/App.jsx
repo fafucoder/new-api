@@ -61,6 +61,7 @@ const ModelStatus = lazy(() => import('./pages/ModelStatus'));
 const CacheHitStats = lazy(() => import('./pages/CacheHitStats'));
 const ChannelValidation = lazy(() => import('./pages/ChannelValidation'));
 const BalanceAlert = lazy(() => import('./pages/BalanceAlert'));
+const ErrorRateAlert = lazy(() => import('./pages/ErrorRateAlert'));
 const Invoice = lazy(() => import('./pages/Invoice'));
 const InvoiceAdmin = lazy(() => import('./pages/InvoiceAdmin'));
 
@@ -369,6 +370,16 @@ function App() {
             <PrivateRoute>
               <Suspense fallback={<Loading></Loading>} key={location.pathname}>
                 <BalanceAlert />
+              </Suspense>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/errorRateAlert'
+          element={
+            <PrivateRoute>
+              <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+                <ErrorRateAlert />
               </Suspense>
             </PrivateRoute>
           }

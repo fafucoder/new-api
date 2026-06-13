@@ -73,6 +73,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       setting: true,
       cacheHitStats: true,
       balanceAlert: true,
+      errorRateAlert: true,
       invoiceAdmin: true,
     },
   });
@@ -207,6 +208,9 @@ export default function SettingsSidebarModulesAdmin(props) {
         if (modules.admin && modules.admin.invoiceAdmin === undefined) {
           modules.admin.invoiceAdmin = true;
         }
+        if (modules.admin && modules.admin.errorRateAlert === undefined) {
+          modules.admin.errorRateAlert = true;
+        }
         setSidebarModulesAdmin(modules);
       } catch (error) {
         // 使用默认配置
@@ -223,7 +227,7 @@ export default function SettingsSidebarModulesAdmin(props) {
             modelStatus: true,
             channelValidation: true,
           },
-          personal: { enabled: true, topup: true, personal: true },
+          personal: { enabled: true, topup: true, invoice: true, personal: true },
           admin: {
             enabled: true,
             channel: true,
@@ -234,6 +238,9 @@ export default function SettingsSidebarModulesAdmin(props) {
             subscription: true,
             setting: true,
             cacheHitStats: true,
+            balanceAlert: true,
+            errorRateAlert: true,
+            invoiceAdmin: true,
           },
         };
         setSidebarModulesAdmin(defaultModules);
@@ -319,6 +326,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         },
         { key: 'cacheHitStats', title: t('缓存监控'), description: t('缓存命中率统计') },
         { key: 'balanceAlert', title: t('余额监控'), description: t('上游余额告警与 webhook 通知') },
+        { key: 'errorRateAlert', title: t('错误监控'), description: t('错误监控与 webhook 通知') },
         { key: 'invoiceAdmin', title: t('发票审核'), description: t('用户发票申请审核') },
       ],
     },

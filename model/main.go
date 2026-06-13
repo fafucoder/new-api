@@ -285,6 +285,7 @@ func migrateDB() error {
 		&CacheHitStats{},
 		&ChannelValidationRecord{},
 		&BalanceAlertRule{},
+		&ErrorRateAlertRule{},
 		&Invoice{},
 	)
 	if err != nil {
@@ -338,6 +339,7 @@ func migrateDBFast() error {
 		{&ChannelUptimeRecord{}, "ChannelUptimeRecord"},
 		{&ChannelValidationRecord{}, "ChannelValidationRecord"},
 		{&BalanceAlertRule{}, "BalanceAlertRule"},
+		{&ErrorRateAlertRule{}, "ErrorRateAlertRule"},
 		{&Invoice{}, "Invoice"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大

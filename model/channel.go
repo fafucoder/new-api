@@ -53,6 +53,7 @@ type Channel struct {
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
 	OtherSettings string `json:"settings" gorm:"column:settings"` // 其他设置，存储azure版本等不需要检索的信息，详见dto.ChannelOtherSettings
+	IsFallback    *bool   `json:"is_fallback" gorm:"default:false"` // 是否为兜底渠道
 
 	// cache info
 	Keys []string `json:"-" gorm:"-"`

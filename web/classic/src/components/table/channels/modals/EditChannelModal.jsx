@@ -2503,6 +2503,15 @@ const EditChannelModal = (props) => {
                     </Col>
                   </Row>
 
+                  <Form.Switch
+                    field='is_fallback'
+                    label={t('标记为兜底渠道')}
+                    checkedText={t('是')}
+                    uncheckedText={t('否')}
+                    onChange={(value) => handleInputChange('is_fallback', value)}
+                    extraText={t('兜底渠道仅在所有常规渠道失败后使用，不参与常规请求')}
+                  />
+
                   {inputs.type === 1 && (
                     <>
                       <div className='mt-4 mb-2 text-sm font-medium text-gray-700'>

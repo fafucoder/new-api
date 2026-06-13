@@ -85,6 +85,7 @@ import {
   ShieldCheck,
   Wallet,
   FileText,
+  TrendingUp,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -167,6 +168,8 @@ export function getLucideIcon(key, selected = false) {
       return <BarChart3 {...commonProps} color={iconColor} />;
     case 'balanceAlert':
       return <Wallet {...commonProps} color={iconColor} />;
+    case 'errorRateAlert':
+      return <TrendingUp {...commonProps} color={iconColor} />;
     case 'invoice':
     case 'invoiceAdmin':
       return <FileText {...commonProps} color={iconColor} />;

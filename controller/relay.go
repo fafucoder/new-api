@@ -196,7 +196,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 			break
 		}
 
-		addUsedChannel(c, channel.Id)
+		addUsedChannel(c, channel.Id, false)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
 			// Ensure consistent 413 for oversized bodies even when error occurs later (e.g., retry path)
@@ -235,6 +235,114 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		}
 	}
 
+	// ===== 兜底阶段 =====
+	if newAPIError != nil {
+		originalError := newAPIError
+		usedChannels := c.GetStringSlice("use_channel")
+
+		fallbackChannel, fallbackErr := service.GetFallbackChannel(relayInfo.OriginModelName, usedChannels)
+		if fallbackErr == nil && fallbackChannel != nil {
+			logger.LogInfo(c, fmt.Sprintf("触发兜底策略：原渠道全部失败（已重试%d次），尝试兜底渠道 #%d (%s)",
+				common.RetryTimes, fallbackChannel.Id, fallbackChannel.Name))
+
+			// 退还原渠道预扣费
+			if relayInfo.Billing != nil {
+				relayInfo.Billing.Refund(c)
+				relayInfo.Billing = nil
+			}
+
+			// 设置兜底渠道上下文
+			setupErr := middleware.SetupContextForSelectedChannel(c, fallbackChannel, relayInfo.OriginModelName)
+			if setupErr == nil {
+				// 重新计算兜底渠道价格
+				fallbackPriceData, priceErr := helper.ModelPriceHelper(c, relayInfo, relayInfo.GetEstimatePromptTokens(), meta)
+				if priceErr == nil {
+					// 按兜底渠道价格预扣费
+					if !fallbackPriceData.FreeModel {
+						preConsumeErr := service.PreConsumeBilling(c, fallbackPriceData.QuotaToPreConsume, relayInfo)
+						if preConsumeErr == nil {
+							// 重置请求体
+							bodyStorage, bodyErr := common.GetBodyStorage(c)
+							if bodyErr == nil {
+								c.Request.Body = io.NopCloser(bodyStorage)
+
+								// 记录兜底渠道
+								addUsedChannel(c, fallbackChannel.Id, true)
+
+								// 执行兜底请求
+								switch relayFormat {
+								case types.RelayFormatOpenAIRealtime:
+									newAPIError = relay.WssHelper(c, relayInfo)
+								case types.RelayFormatClaude:
+									newAPIError = relay.ClaudeHelper(c, relayInfo)
+								case types.RelayFormatGemini:
+									newAPIError = geminiRelayHandler(c, relayInfo)
+								default:
+									newAPIError = relayHandler(c, relayInfo)
+								}
+
+								if newAPIError == nil {
+									// 兜底成功
+									logger.LogInfo(c, fmt.Sprintf("兜底请求成功：渠道 #%d，原始错误：%s",
+										fallbackChannel.Id, originalError.Error()))
+									relayInfo.LastError = nil
+									return
+								} else {
+									// 兜底失败
+									logger.LogError(c, fmt.Sprintf("兜底请求失败：渠道 #%d，兜底错误：%s，原始错误：%s",
+										fallbackChannel.Id, newAPIError.Error(), originalError.Error()))
+									processChannelError(c, *types.NewChannelError(fallbackChannel.Id, fallbackChannel.Type, fallbackChannel.Name,
+										fallbackChannel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey),
+										fallbackChannel.GetAutoBan()), newAPIError)
+								}
+							} else {
+								logger.LogError(c, fmt.Sprintf("兜底渠道获取请求体失败：%s", bodyErr.Error()))
+							}
+						} else {
+							logger.LogError(c, fmt.Sprintf("兜底渠道预扣费失败：%s", preConsumeErr.Error()))
+						}
+					} else {
+						// 兜底渠道免费，直接执行请求
+						bodyStorage, bodyErr := common.GetBodyStorage(c)
+						if bodyErr == nil {
+							c.Request.Body = io.NopCloser(bodyStorage)
+							addUsedChannel(c, fallbackChannel.Id, true)
+
+							switch relayFormat {
+							case types.RelayFormatOpenAIRealtime:
+								newAPIError = relay.WssHelper(c, relayInfo)
+							case types.RelayFormatClaude:
+								newAPIError = relay.ClaudeHelper(c, relayInfo)
+							case types.RelayFormatGemini:
+								newAPIError = geminiRelayHandler(c, relayInfo)
+							default:
+								newAPIError = relayHandler(c, relayInfo)
+							}
+
+							if newAPIError == nil {
+								logger.LogInfo(c, fmt.Sprintf("兜底请求成功（免费渠道）：渠道 #%d", fallbackChannel.Id))
+								relayInfo.LastError = nil
+								return
+							} else {
+								logger.LogError(c, fmt.Sprintf("兜底请求失败（免费渠道）：渠道 #%d，错误：%s",
+									fallbackChannel.Id, newAPIError.Error()))
+								processChannelError(c, *types.NewChannelError(fallbackChannel.Id, fallbackChannel.Type, fallbackChannel.Name,
+									fallbackChannel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey),
+									fallbackChannel.GetAutoBan()), newAPIError)
+							}
+						}
+					}
+				} else {
+					logger.LogError(c, fmt.Sprintf("兜底渠道价格计算失败：%s", priceErr.Error()))
+				}
+			} else {
+				logger.LogError(c, fmt.Sprintf("兜底渠道上下文设置失败：%s", setupErr.Error()))
+			}
+		}
+		// 恢复原始错误
+		newAPIError = originalError
+	}
+
 	useChannel := c.GetStringSlice("use_channel")
 	if len(useChannel) > 1 {
 		retryLogStr := fmt.Sprintf("重试：%s", strings.Trim(strings.Join(strings.Fields(fmt.Sprint(useChannel)), "->"), "[]"))
@@ -254,9 +362,13 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func addUsedChannel(c *gin.Context, channelId int) {
+func addUsedChannel(c *gin.Context, channelId int, isFallback bool) {
 	useChannel := c.GetStringSlice("use_channel")
-	useChannel = append(useChannel, fmt.Sprintf("%d", channelId))
+	if isFallback {
+		useChannel = append(useChannel, fmt.Sprintf("fallback:%d", channelId))
+	} else {
+		useChannel = append(useChannel, fmt.Sprintf("%d", channelId))
+	}
 	c.Set("use_channel", useChannel)
 }
 
@@ -534,7 +646,7 @@ func RelayTask(c *gin.Context) {
 			}
 		}
 
-		addUsedChannel(c, channel.Id)
+		addUsedChannel(c, channel.Id, false)
 		bodyStorage, bodyErr := common.GetBodyStorage(c)
 		if bodyErr != nil {
 			if common.IsRequestBodyTooLargeError(bodyErr) || errors.Is(bodyErr, common.ErrRequestBodyTooLarge) {
@@ -560,6 +672,101 @@ func RelayTask(c *gin.Context) {
 
 		if !shouldRetryTaskRelay(c, channel.Id, taskErr, common.RetryTimes-retryParam.GetRetry()) {
 			break
+		}
+	}
+
+	// ===== Task API 兜底阶段 =====
+	if taskErr != nil {
+		originalTaskErr := taskErr
+		usedChannels := c.GetStringSlice("use_channel")
+
+		fallbackChannel, fallbackErr := service.GetFallbackChannel(relayInfo.OriginModelName, usedChannels)
+		if fallbackErr == nil && fallbackChannel != nil {
+			logger.LogInfo(c, fmt.Sprintf("触发兜底策略(Task)：原渠道全部失败（已重试%d次），尝试兜底渠道 #%d (%s)",
+				common.RetryTimes, fallbackChannel.Id, fallbackChannel.Name))
+
+			// 退还原渠道预扣费
+			if relayInfo.Billing != nil {
+				relayInfo.Billing.Refund(c)
+				relayInfo.Billing = nil
+			}
+
+			// 设置兜底渠道上下文
+			setupErr := middleware.SetupContextForSelectedChannel(c, fallbackChannel, relayInfo.OriginModelName)
+			if setupErr == nil {
+				// 重新计算兜底渠道价格
+				fallbackPriceData, priceErr := helper.ModelPriceHelper(c, relayInfo, relayInfo.GetEstimatePromptTokens(), nil)
+				if priceErr == nil {
+					// 按兜底渠道价格预扣费
+					if !fallbackPriceData.FreeModel {
+						preConsumeErr := service.PreConsumeBilling(c, fallbackPriceData.QuotaToPreConsume, relayInfo)
+						if preConsumeErr == nil {
+							// 重置请求体
+							bodyStorage, bodyErr := common.GetBodyStorage(c)
+							if bodyErr == nil {
+								c.Request.Body = io.NopCloser(bodyStorage)
+
+								// 记录兜底渠道
+								addUsedChannel(c, fallbackChannel.Id, true)
+
+								// 执行兜底请求
+								result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
+
+								if taskErr == nil {
+									// 兜底成功
+									logger.LogInfo(c, fmt.Sprintf("兜底请求成功(Task)：渠道 #%d", fallbackChannel.Id))
+								} else {
+									// 兜底失败
+									logger.LogError(c, fmt.Sprintf("兜底请求失败(Task)：渠道 #%d，兜底错误：%s，原始错误：%s",
+										fallbackChannel.Id, taskErr.Message, originalTaskErr.Message))
+									if !taskErr.LocalError {
+										processChannelError(c,
+											*types.NewChannelError(fallbackChannel.Id, fallbackChannel.Type, fallbackChannel.Name,
+												fallbackChannel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey),
+												fallbackChannel.GetAutoBan()),
+											types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
+									}
+								}
+							} else {
+								logger.LogError(c, fmt.Sprintf("兜底渠道获取请求体失败(Task)：%s", bodyErr.Error()))
+							}
+						} else {
+							logger.LogError(c, fmt.Sprintf("兜底渠道预扣费失败(Task)：%s", preConsumeErr.Error()))
+						}
+					} else {
+						// 兜底渠道免费，直接执行请求
+						bodyStorage, bodyErr := common.GetBodyStorage(c)
+						if bodyErr == nil {
+							c.Request.Body = io.NopCloser(bodyStorage)
+							addUsedChannel(c, fallbackChannel.Id, true)
+
+							result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
+
+							if taskErr == nil {
+								logger.LogInfo(c, fmt.Sprintf("兜底请求成功(Task,免费渠道)：渠道 #%d", fallbackChannel.Id))
+							} else {
+								logger.LogError(c, fmt.Sprintf("兜底请求失败(Task,免费渠道)：渠道 #%d，错误：%s",
+									fallbackChannel.Id, taskErr.Message))
+								if !taskErr.LocalError {
+									processChannelError(c,
+										*types.NewChannelError(fallbackChannel.Id, fallbackChannel.Type, fallbackChannel.Name,
+											fallbackChannel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey),
+											fallbackChannel.GetAutoBan()),
+										types.NewOpenAIError(taskErr.Error, types.ErrorCodeBadResponseStatusCode, taskErr.StatusCode))
+								}
+							}
+						}
+					}
+				} else {
+					logger.LogError(c, fmt.Sprintf("兜底渠道价格计算失败(Task)：%s", priceErr.Error()))
+				}
+			} else {
+				logger.LogError(c, fmt.Sprintf("兜底渠道上下文设置失败(Task)：%s", setupErr.Error()))
+			}
+		}
+		// 恢复原始错误（如果兜底失败）
+		if taskErr != nil {
+			taskErr = originalTaskErr
 		}
 	}
 

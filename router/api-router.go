@@ -208,6 +208,16 @@ func SetApiRouter(router *gin.Engine) {
 			balanceAlertRoute.GET("/tags", controller.GetBalanceAlertTags)
 			balanceAlertRoute.POST("/rules/:id/test", controller.PostBalanceAlertRuleTest)
 		}
+		errorRateAlertRoute := apiRouter.Group("/error-rate-alert")
+		errorRateAlertRoute.Use(middleware.AdminAuth())
+		{
+			errorRateAlertRoute.GET("", controller.GetErrorRateAlerts)
+			errorRateAlertRoute.POST("", controller.CreateErrorRateAlert)
+			errorRateAlertRoute.GET("/:id", controller.GetErrorRateAlert)
+			errorRateAlertRoute.PUT("/:id", controller.UpdateErrorRateAlert)
+			errorRateAlertRoute.DELETE("/:id", controller.DeleteErrorRateAlert)
+			errorRateAlertRoute.POST("/:id/test", controller.TestErrorRateAlert)
+		}
 		invoiceRoute := apiRouter.Group("/invoice")
 		invoiceRoute.Use(middleware.UserAuth())
 		{
@@ -364,6 +374,10 @@ func SetApiRouter(router *gin.Engine) {
 		cacheHitRoute := apiRouter.Group("/cache_hit_stats")
 		cacheHitRoute.GET("/me", middleware.UserAuth(), controller.GetMyCacheHitStats)
 		cacheHitRoute.GET("/by_channel_model", middleware.AdminAuth(), controller.GetByChannelModelCacheHitStats)
+
+		usageStatsRoute := apiRouter.Group("/usage_stats")
+		usageStatsRoute.GET("/error_rate/me", middleware.UserAuth(), controller.GetMyErrorRate)
+		usageStatsRoute.GET("/error_rate", middleware.AdminAuth(), controller.GetErrorRate)
 
 		logRoute.Use(middleware.CORS(), middleware.CriticalRateLimit())
 		{

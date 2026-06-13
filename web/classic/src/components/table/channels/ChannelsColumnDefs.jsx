@@ -519,6 +519,22 @@ export const getChannelsColumns = ({
       },
     },
     {
+      key: COLUMN_KEYS.IS_FALLBACK,
+      title: t('兜底渠道'),
+      dataIndex: 'is_fallback',
+      render: (text, record, index) => {
+        return text ? (
+          <Tag color='blue' shape='circle'>
+            {t('是')}
+          </Tag>
+        ) : (
+          <Tag color='grey' shape='circle'>
+            {t('否')}
+          </Tag>
+        );
+      },
+    },
+    {
       key: COLUMN_KEYS.RESPONSE_TIME,
       title: t('响应时间'),
       dataIndex: 'response_time',
