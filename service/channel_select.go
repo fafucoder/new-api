@@ -164,10 +164,7 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 // getRandomSatisfiedChannelWith4KFilter 获取满足4K要求的随机渠道
 // 通过过滤函数预先筛选渠道池，不浪费retry次数
 func getRandomSatisfiedChannelWith4KFilter(ctx *gin.Context, group string, modelName string, retry int) (*model.Channel, error) {
-	require4K, ok := common.GetContextKeyType[bool](ctx, constant.ContextKeyRequire4K)
-	if !ok {
-		return model.GetRandomSatisfiedChannel(group, modelName, retry)
-	}
+	require4K, _ := common.GetContextKeyType[bool](ctx, constant.ContextKeyRequire4K)
 
 	// 创建过滤函数
 	filter := func(channel *model.Channel) bool {
@@ -176,12 +173,14 @@ func getRandomSatisfiedChannelWith4KFilter(ctx *gin.Context, group string, model
 		if channel.Setting == nil || *channel.Setting == "" {
 			return true
 		}
+
 		// 如果需要4K，只返回支持4K的渠道
 		if require4K {
 			return settings.Support4K
 		}
+
 		// 如果不需要4K，返回所有渠道（包括支持4K的）
-		return true
+		return !settings.Support4K
 	}
 
 	channel, err := model.GetRandomSatisfiedChannelWithFilter(group, modelName, retry, filter)
