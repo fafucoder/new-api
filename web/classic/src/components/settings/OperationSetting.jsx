@@ -29,6 +29,7 @@ import SettingsCreditLimit from '../../pages/Setting/Operation/SettingsCreditLim
 import SettingsCheckin from '../../pages/Setting/Operation/SettingsCheckin';
 import SettingsInvoice from '../../pages/Setting/Operation/SettingsInvoice';
 import SettingsBalanceAlert from '../../pages/Setting/Operation/SettingsBalanceAlert';
+import SettingsErrorRateAlert from '../../pages/Setting/Operation/SettingsErrorRateAlert';
 import { API, showError, toBoolean } from '../../helpers';
 
 const OperationSetting = () => {
@@ -85,6 +86,11 @@ const OperationSetting = () => {
     'monitor_setting.auto_balance_alert_enabled': false,
     'monitor_setting.auto_balance_alert_minutes': 30,
     'monitor_setting.balance_alert_cooldown_minutes': 6,
+
+    /* 错误率监控告警 */
+    'monitor_setting.auto_error_rate_alert_enabled': false,
+    'monitor_setting.auto_error_rate_alert_minutes': 5,
+    'monitor_setting.error_rate_alert_cooldown_minutes': 60,
 
     /* 令牌设置 */
     'token_setting.max_user_tokens': 1000,
@@ -163,6 +169,10 @@ const OperationSetting = () => {
         {/* 余额监控告警设置 */}
         <Card style={{ marginTop: '10px' }}>
           <SettingsBalanceAlert options={inputs} refresh={onRefresh} />
+        </Card>
+        {/* 错误率监控告警设置 */}
+        <Card style={{ marginTop: '10px' }}>
+          <SettingsErrorRateAlert options={inputs} refresh={onRefresh} />
         </Card>
         {/* 额度设置 */}
         <Card style={{ marginTop: '10px' }}>
