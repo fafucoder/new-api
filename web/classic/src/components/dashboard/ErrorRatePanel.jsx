@@ -51,24 +51,79 @@ function fmtTime(unixSec, win) {
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
-function makeLineSpec(values, isDark) {
+function makeChartSpec(values, isDark) {
+  // 双轴混合图：柱状=该桶请求总数(成功+失败)，折线=该桶错误率%
   return {
-    type: 'line',
-    data: [{ values }],
-    xField: 'time',
-    yField: 'error_rate',
-    point: { visible: true, size: 4 },
-    line: { style: { stroke: isDark ? '#f87171' : '#ef4444', lineWidth: 2 } },
+    type: 'common',
+    data: [{ id: 'trend', values }],
+    series: [
+      {
+        type: 'bar',
+        id: 'requests',
+        dataId: 'trend',
+        xField: 'time',
+        yField: 'total',
+        bar: {
+          style: {
+            fill: isDark ? '#60a5fa' : '#3b82f6',
+            cornerRadius: 2,
+          },
+        },
+        tooltip: {
+          mark: {
+            title: { value: '请求数' },
+            content: [{ key: (d) => d.time, value: (d) => d.total }],
+          },
+        },
+      },
+      {
+        type: 'line',
+        id: 'errorRate',
+        dataId: 'trend',
+        xField: 'time',
+        yField: 'error_rate',
+        point: { visible: true, size: 4 },
+        line: { style: { stroke: isDark ? '#f87171' : '#ef4444', lineWidth: 2 } },
+        tooltip: {
+          mark: {
+            title: { value: '错误率' },
+            content: [{ key: (d) => d.time, value: (d) => `${d.error_rate}%` }],
+          },
+        },
+      },
+    ],
     axes: [
       {
         orient: 'left',
+        seriesId: ['requests'],
         min: 0,
+        label: {
+          style: { fill: isDark ? '#cbd5e1' : '#64748b', fontSize: 12 },
+        },
+        title: {
+          visible: true,
+          text: '请求数',
+          style: { fill: isDark ? '#94a3b8' : '#64748b', fontSize: 11 },
+        },
+        line: { style: { stroke: isDark ? '#334155' : '#e2e8f0' } },
+        grid: { style: { stroke: isDark ? '#1e293b' : '#f1f5f9' } },
+      },
+      {
+        orient: 'right',
+        seriesId: ['errorRate'],
+        min: 0,
+        max: 100,
         label: {
           formatMethod: (v) => `${v}%`,
           style: { fill: isDark ? '#cbd5e1' : '#64748b', fontSize: 12 },
         },
+        title: {
+          visible: true,
+          text: '错误率',
+          style: { fill: isDark ? '#94a3b8' : '#64748b', fontSize: 11 },
+        },
         line: { style: { stroke: isDark ? '#334155' : '#e2e8f0' } },
-        grid: { style: { stroke: isDark ? '#1e293b' : '#f1f5f9' } },
+        grid: { visible: false },
       },
       {
         orient: 'bottom',
@@ -80,9 +135,12 @@ function makeLineSpec(values, isDark) {
         line: { style: { stroke: isDark ? '#334155' : '#e2e8f0' } },
       },
     ],
-    tooltip: {
-      mark: {
-        content: [{ key: (d) => d.time, value: (d) => `${d.error_rate}%` }],
+    legends: {
+      visible: true,
+      orient: 'top',
+      position: 'end',
+      item: {
+        label: { style: { fill: isDark ? '#cbd5e1' : '#64748b' } },
       },
     },
   };
@@ -165,9 +223,10 @@ const ErrorRatePanel = ({ CARD_PROPS, CHART_CONFIG, FLEX_CENTER_GAP2, t }) => {
   const xWin = isCustom ? 'custom' : timeWindow;
   const spec = useMemo(
     () =>
-      makeLineSpec(
+      makeChartSpec(
         trend.map((b) => ({
           time: fmtTime(b.time, xWin),
+          total: (b.error_count || 0) + (b.success_count || 0),
           error_rate: b.error_rate,
         })),
         isDark,

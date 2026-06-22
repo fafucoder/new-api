@@ -43,29 +43,35 @@ func calcErrorRate(errorCount, successCount int64) float64 {
 
 // QueryErrorRate 统计 [start,end] 内按 bucketSize 分桶的错误率。
 // userId>0 限定该用户；applyChannelFilter=true 时按 channelIDs 过滤(空列表=命中0行)。
-// 按 request_id 去重：同一 request_id 的多次重试只计算最终结果。
+// 按 request_id 去重：同一 request_id 的多次重试只计算最终结果，
+// 并且把该请求归入 MIN(created_at) 所在的桶，避免跨桶重试被拆成两个请求
+// （这是「顶部错误率与下方 error_count/success_count/total 对不上」的根因）。
 func QueryErrorRate(userId int, channelIDs []int, applyChannelFilter bool, window string, start, end, bucketSize int64) (ErrorRateResult, error) {
 	result := ErrorRateResult{Window: window, Trend: []ErrorRateBucket{}}
 	if bucketSize <= 0 {
 		bucketSize = 1
 	}
 
-	// 分桶表达式 created_at / bucketSize（整除）。
+	// 分桶表达式 first_ts / bucketSize（整除）。
 	// MySQL 的 / 返回小数需 FLOOR；SQLite/PostgreSQL 整数 / 整数即整除。
+	// 注意：必须基于「请求首次时间」分桶，不能直接用 created_at，
+	// 否则一个请求的重试错误日志和最终成功日志若跨桶，会被同时计入两个桶的
+	// error_count / success_count，造成与顶部聚合数对不上。
 	var bucketExpr string
 	if common.UsingMySQL {
-		bucketExpr = "FLOOR(created_at / ?)"
+		bucketExpr = "FLOOR(first_ts / ?)"
 	} else {
-		bucketExpr = "(created_at / ?)"
+		bucketExpr = "(first_ts / ?)"
 	}
 
-	// 子查询：按 request_id 分组，计算每个请求的最终结果
-	// has_success = 1 表示该请求最终成功（有至少一条 LogTypeConsume）
-	// bucket 使用 MIN(created_at) 以保证分桶基于请求首次时间
+	// 子查询：按 request_id 聚合到「请求维度」。
+	// has_success = 1 表示该请求最终成功（至少一条 LogTypeConsume）。
+	// first_ts = 该请求最早一条日志的时间，用于稳定分桶。
 	subQuery := LOG_DB.Table("logs").
-		Select(bucketExpr+" AS bucket, "+
-			"MAX(CASE WHEN type = ? THEN 1 ELSE 0 END) AS has_success",
-			bucketSize, LogTypeConsume).
+		Select("request_id, "+
+			"MAX(CASE WHEN type = ? THEN 1 ELSE 0 END) AS has_success, "+
+			"MIN(created_at) AS first_ts",
+			LogTypeConsume).
 		Where("created_at >= ? AND created_at <= ?", start, end).
 		Where("type IN (?)", []int{LogTypeConsume, LogTypeError}).
 		Where("request_id != ?", "") // 只统计有 request_id 的日志
@@ -77,13 +83,14 @@ func QueryErrorRate(userId int, channelIDs []int, applyChannelFilter bool, windo
 		subQuery = subQuery.Where("channel_id IN (?)", channelIDs)
 	}
 
-	subQuery = subQuery.Group("request_id, bucket")
+	subQuery = subQuery.Group("request_id")
 
-	// 外层查询：按 bucket 聚合，统计成功和失败的请求数
+	// 外层查询：按「请求首次时间所在桶」聚合，统计成功和失败的请求数
 	query := LOG_DB.Table("(?) AS req", subQuery).
-		Select("bucket, "+
+		Select(bucketExpr+" AS bucket, "+
 			"SUM(CASE WHEN has_success = 0 THEN 1 ELSE 0 END) AS error_count, "+
-			"SUM(CASE WHEN has_success = 1 THEN 1 ELSE 0 END) AS success_count").
+			"SUM(CASE WHEN has_success = 1 THEN 1 ELSE 0 END) AS success_count",
+			bucketSize).
 		Group("bucket")
 
 	var rows []errorRateRow
