@@ -54,97 +54,105 @@ function fmtTime(unixSec, win, withSeconds) {
   return withSeconds ? `${base}:${pad(d.getSeconds())}` : base;
 }
 
-function makeChartSpec(values, isDark) {
+function makeChartSpec(values, isDark, showRequests, showErrorRate) {
   // 双轴混合图：柱状=该桶请求总数(成功+失败)，折线=该桶错误率%
+  // 注意：通过条件构造 series 数组来实现「点击图例隐藏」，
+  // 不要依赖 series.visible —— VChart 的 react 封装在该字段变化时未必重渲染。
+  const series = [];
+  if (showRequests) {
+    series.push({
+      type: 'bar',
+      id: 'requests',
+      name: '请求数',
+      dataId: 'trend',
+      xField: 'time',
+      yField: 'total',
+      bar: {
+        style: {
+          fill: isDark ? '#60a5fa' : '#3b82f6',
+          cornerRadius: 2,
+        },
+      },
+      tooltip: {
+        mark: {
+          title: { value: '请求数' },
+          content: [{ key: (d) => d.time, value: (d) => d.total }],
+        },
+      },
+    });
+  }
+  if (showErrorRate) {
+    series.push({
+      type: 'line',
+      id: 'errorRate',
+      name: '错误率',
+      dataId: 'trend',
+      xField: 'time',
+      yField: 'error_rate',
+      point: { visible: true, size: 4 },
+      line: { style: { stroke: isDark ? '#f87171' : '#ef4444', lineWidth: 2 } },
+      tooltip: {
+        mark: {
+          title: { value: '错误率' },
+          content: [{ key: (d) => d.time, value: (d) => `${d.error_rate}%` }],
+        },
+      },
+    });
+  }
+  const axes = [
+    {
+      orient: 'bottom',
+      label: {
+        autoHide: true,
+        autoRotate: true,
+        style: { fill: isDark ? '#cbd5e1' : '#64748b', fontSize: 10 },
+      },
+      line: { style: { stroke: isDark ? '#334155' : '#e2e8f0' } },
+    },
+  ];
+  if (showRequests) {
+    axes.push({
+      orient: 'left',
+      seriesId: ['requests'],
+      min: 0,
+      label: {
+        style: { fill: isDark ? '#cbd5e1' : '#64748b', fontSize: 12 },
+      },
+      title: {
+        visible: true,
+        text: '请求数',
+        style: { fill: isDark ? '#94a3b8' : '#64748b', fontSize: 11 },
+      },
+      line: { style: { stroke: isDark ? '#334155' : '#e2e8f0' } },
+      grid: { style: { stroke: isDark ? '#1e293b' : '#f1f5f9' } },
+    });
+  }
+  if (showErrorRate) {
+    axes.push({
+      orient: 'right',
+      seriesId: ['errorRate'],
+      min: 0,
+      max: 100,
+      label: {
+        formatMethod: (v) => `${v}%`,
+        style: { fill: isDark ? '#cbd5e1' : '#64748b', fontSize: 12 },
+      },
+      title: {
+        visible: true,
+        text: '错误率',
+        style: { fill: isDark ? '#94a3b8' : '#64748b', fontSize: 11 },
+      },
+      line: { style: { stroke: isDark ? '#334155' : '#e2e8f0' } },
+      grid: { visible: false },
+    });
+  }
   return {
     type: 'common',
     data: [{ id: 'trend', values }],
-    series: [
-      {
-        type: 'bar',
-        id: 'requests',
-        dataId: 'trend',
-        xField: 'time',
-        yField: 'total',
-        bar: {
-          style: {
-            fill: isDark ? '#60a5fa' : '#3b82f6',
-            cornerRadius: 2,
-          },
-        },
-        tooltip: {
-          mark: {
-            title: { value: '请求数' },
-            content: [{ key: (d) => d.time, value: (d) => d.total }],
-          },
-        },
-      },
-      {
-        type: 'line',
-        id: 'errorRate',
-        dataId: 'trend',
-        xField: 'time',
-        yField: 'error_rate',
-        point: { visible: true, size: 4 },
-        line: { style: { stroke: isDark ? '#f87171' : '#ef4444', lineWidth: 2 } },
-        tooltip: {
-          mark: {
-            title: { value: '错误率' },
-            content: [{ key: (d) => d.time, value: (d) => `${d.error_rate}%` }],
-          },
-        },
-      },
-    ],
-    axes: [
-      {
-        orient: 'left',
-        seriesId: ['requests'],
-        min: 0,
-        label: {
-          style: { fill: isDark ? '#cbd5e1' : '#64748b', fontSize: 12 },
-        },
-        title: {
-          visible: true,
-          text: '请求数',
-          style: { fill: isDark ? '#94a3b8' : '#64748b', fontSize: 11 },
-        },
-        line: { style: { stroke: isDark ? '#334155' : '#e2e8f0' } },
-        grid: { style: { stroke: isDark ? '#1e293b' : '#f1f5f9' } },
-      },
-      {
-        orient: 'right',
-        seriesId: ['errorRate'],
-        min: 0,
-        max: 100,
-        label: {
-          formatMethod: (v) => `${v}%`,
-          style: { fill: isDark ? '#cbd5e1' : '#64748b', fontSize: 12 },
-        },
-        title: {
-          visible: true,
-          text: '错误率',
-          style: { fill: isDark ? '#94a3b8' : '#64748b', fontSize: 11 },
-        },
-        line: { style: { stroke: isDark ? '#334155' : '#e2e8f0' } },
-        grid: { visible: false },
-      },
-      {
-        orient: 'bottom',
-        label: {
-          autoHide: true,
-          autoRotate: true,
-          style: { fill: isDark ? '#cbd5e1' : '#64748b', fontSize: 10 },
-        },
-        line: { style: { stroke: isDark ? '#334155' : '#e2e8f0' } },
-      },
-    ],
+    series,
+    axes,
     legends: {
-      visible: true,
-      orient: 'top',
-      position: 'end',
-      item: {
-        label: { style: { fill: isDark ? '#cbd5e1' : '#64748b' } },
-      },
+      visible: false,
     },
   };
 }
@@ -160,6 +168,10 @@ const ErrorRatePanel = ({ CARD_PROPS, CHART_CONFIG, FLEX_CENTER_GAP2, t }) => {
   const [channels, setChannels] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  // 自定义图例可见性：VChart 的 discrete legend 在 bar+line 组合图里不会自动派生
+  // 出两项可点击的开关，这里改用 React state 控制 series 的 visible 字段
+  const [showRequests, setShowRequests] = useState(true);
+  const [showErrorRate, setShowErrorRate] = useState(true);
 
   const isCustom = !!(customRange && customRange[0] && customRange[1]);
 
@@ -236,8 +248,10 @@ const ErrorRatePanel = ({ CARD_PROPS, CHART_CONFIG, FLEX_CENTER_GAP2, t }) => {
           error_rate: b.error_rate,
         })),
         isDark,
+        showRequests,
+        showErrorRate,
       ),
-    [trend, xWin, isDark, withSeconds],
+    [trend, xWin, isDark, withSeconds, showRequests, showErrorRate],
   );
 
   return (
@@ -333,6 +347,34 @@ const ErrorRatePanel = ({ CARD_PROPS, CHART_CONFIG, FLEX_CENTER_GAP2, t }) => {
           </div>
         </div>
 
+        {/* 自定义图例：点击切换 series 可见性 */}
+        <div className='flex justify-end items-center gap-4 px-2 pt-1'>
+          <button
+            type='button'
+            onClick={() => setShowRequests((v) => !v)}
+            className='flex items-center gap-1.5 text-xs cursor-pointer bg-transparent border-0 p-0'
+            style={{ opacity: showRequests ? 1 : 0.4 }}
+          >
+            <span
+              className='inline-block w-3 h-3 rounded-sm'
+              style={{ background: isDark ? '#60a5fa' : '#3b82f6' }}
+            />
+            <Text type='secondary'>{t('请求数')}</Text>
+          </button>
+          <button
+            type='button'
+            onClick={() => setShowErrorRate((v) => !v)}
+            className='flex items-center gap-1.5 text-xs cursor-pointer bg-transparent border-0 p-0'
+            style={{ opacity: showErrorRate ? 1 : 0.4 }}
+          >
+            <span
+              className='inline-block w-3 h-3 rounded-full'
+              style={{ background: isDark ? '#f87171' : '#ef4444' }}
+            />
+            <Text type='secondary'>{t('错误率')}</Text>
+          </button>
+        </div>
+
         {/* 趋势图 */}
         <Spin spinning={loading}>
           <div className='h-72 p-2'>
@@ -342,7 +384,11 @@ const ErrorRatePanel = ({ CARD_PROPS, CHART_CONFIG, FLEX_CENTER_GAP2, t }) => {
                 style={{ paddingTop: '70px' }}
               />
             ) : (
-              <VChart key={actualTheme} spec={spec} option={CHART_CONFIG} />
+              <VChart
+                key={`${actualTheme}-${showRequests ? 'r' : ''}${showErrorRate ? 'e' : ''}`}
+                spec={spec}
+                option={CHART_CONFIG}
+              />
             )}
           </div>
         </Spin>
