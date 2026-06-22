@@ -43,12 +43,15 @@ const WINDOWS = [
   { key: '1d', label: '最近1天' },
 ];
 
-function fmtTime(unixSec, win) {
+function fmtTime(unixSec, win, withSeconds) {
   const d = new Date(unixSec * 1000);
   const pad = (n) => String(n).padStart(2, '0');
-  if (win === '1d' || win === 'custom')
-    return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (win === '1d' || win === 'custom') {
+    const base = `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return withSeconds ? `${base}:${pad(d.getSeconds())}` : base;
+  }
+  const base = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return withSeconds ? `${base}:${pad(d.getSeconds())}` : base;
 }
 
 function makeChartSpec(values, isDark) {
@@ -221,17 +224,20 @@ const ErrorRatePanel = ({ CARD_PROPS, CHART_CONFIG, FLEX_CENTER_GAP2, t }) => {
   const trend = data?.trend || [];
   const hasData = trend.some((b) => b.error_count > 0 || b.success_count > 0);
   const xWin = isCustom ? 'custom' : timeWindow;
+  // 桶间隔 < 60s 时必须把秒带上，否则相邻桶被 fmtTime 折叠到同一 x，柱状会合并
+  const withSeconds =
+    trend.length >= 2 && trend[1].time - trend[0].time < 60;
   const spec = useMemo(
     () =>
       makeChartSpec(
         trend.map((b) => ({
-          time: fmtTime(b.time, xWin),
+          time: fmtTime(b.time, xWin, withSeconds),
           total: (b.error_count || 0) + (b.success_count || 0),
           error_rate: b.error_rate,
         })),
         isDark,
       ),
-    [trend, xWin, isDark],
+    [trend, xWin, isDark, withSeconds],
   );
 
   return (
