@@ -30,8 +30,9 @@ type ErrorRateAlertRule struct {
 	Scope         string  `json:"scope" gorm:"type:varchar(16);index"`           // global/channel/tag
 	ScopeValue    string  `json:"scope_value" gorm:"type:varchar(64);index"`     // ""(global) / channel_id / tag
 	TimeWindow    string  `json:"time_window" gorm:"type:varchar(8)"`            // 5m/15m/30m/1h/6h
-	Threshold     float64 `json:"threshold"`                                     // 错误率阈值 (0-100, 百分比)
-	WebhookURL    string  `json:"webhook_url" gorm:"type:varchar(512)"`          // 可选，留空使用系统默认
+	Threshold       float64 `json:"threshold"`                                     // 错误率阈值 (0-100, 百分比)
+	MinRequestCount int64   `json:"min_request_count" gorm:"default:0"`            // 最低请求数，总请求数低于此值不告警
+	WebhookURL      string  `json:"webhook_url" gorm:"type:varchar(512)"`          // 可选，留空使用系统默认
 	WebhookSecret string  `json:"webhook_secret" gorm:"type:varchar(128)"`       // 可选
 	Enabled       bool    `json:"enabled" gorm:"default:true;index"`
 	Remark        string  `json:"remark" gorm:"type:varchar(256)"`
@@ -82,6 +83,9 @@ func ValidateErrorRateAlertRule(rule *ErrorRateAlertRule) error {
 	if rule.Threshold < 0 || rule.Threshold > 100 {
 		return errors.New("threshold must be between 0 and 100")
 	}
+	if rule.MinRequestCount < 0 {
+		return errors.New("min_request_count must be >= 0")
+	}
 	if rule.AlertState == "" {
 		rule.AlertState = ErrorRateAlertStateNormal
 	}
@@ -107,15 +111,16 @@ func UpdateErrorRateAlertRule(rule *ErrorRateAlertRule) error {
 	return DB.Model(&ErrorRateAlertRule{}).
 		Where("id = ?", rule.Id).
 		Updates(map[string]any{
-			"name":           rule.Name,
-			"scope":          rule.Scope,
-			"scope_value":    rule.ScopeValue,
-			"time_window":    rule.TimeWindow,
-			"threshold":      rule.Threshold,
-			"webhook_url":    rule.WebhookURL,
-			"webhook_secret": rule.WebhookSecret,
-			"enabled":        rule.Enabled,
-			"remark":         rule.Remark,
+			"name":              rule.Name,
+			"scope":             rule.Scope,
+			"scope_value":       rule.ScopeValue,
+			"time_window":       rule.TimeWindow,
+			"threshold":         rule.Threshold,
+			"min_request_count": rule.MinRequestCount,
+			"webhook_url":       rule.WebhookURL,
+			"webhook_secret":    rule.WebhookSecret,
+			"enabled":           rule.Enabled,
+			"remark":            rule.Remark,
 		}).Error
 }
 

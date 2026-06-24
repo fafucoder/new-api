@@ -268,6 +268,11 @@ export const getErrorRateAlertColumns = ({
       render: (v) => `${v}%`,
     },
     {
+      title: t('最低请求数'),
+      dataIndex: 'min_request_count',
+      render: (v) => (v > 0 ? v : '—'),
+    },
+    {
       title: t('最近错误率'),
       key: 'error_rate',
       render: (_text, record) => renderErrorRate(record, t),

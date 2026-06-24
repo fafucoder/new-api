@@ -98,6 +98,7 @@ function ErrorRateAlertPage() {
       scope_value: '',
       time_window: '5m',
       threshold: 10,
+      min_request_count: 0,
       webhook_url: '',
       webhook_secret: '',
       enabled: true,

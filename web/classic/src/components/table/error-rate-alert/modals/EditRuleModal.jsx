@@ -84,6 +84,7 @@ const EditRuleModal = ({
           scope_value: form.scope_value || '',
           time_window: form.time_window || '5m',
           threshold: form.threshold || 10,
+          min_request_count: form.min_request_count || 0,
           webhook_url: form.webhook_url || '',
           webhook_secret: form.webhook_secret || '',
           remark: form.remark || '',
@@ -162,6 +163,7 @@ const EditRuleModal = ({
             scope_value: form.scope_value || '',
             time_window: form.time_window || '5m',
             threshold: form.threshold || 10,
+            min_request_count: form.min_request_count || 0,
             webhook_url: form.webhook_url || '',
             webhook_secret: form.webhook_secret || '',
             remark: form.remark || '',
@@ -308,6 +310,18 @@ const EditRuleModal = ({
                         },
                       ]}
                       extraText={t('超过此值触发告警')}
+                    />
+                  </Col>
+                  <Col span={12}>
+                    <Form.InputNumber
+                      field='min_request_count'
+                      label={t('最低请求数')}
+                      placeholder='0'
+                      min={0}
+                      step={1}
+                      precision={0}
+                      style={{ width: '100%' }}
+                      extraText={t('请求数低于此值不告警，0 表示不限制')}
                     />
                   </Col>
                 </Row>

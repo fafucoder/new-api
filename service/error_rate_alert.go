@@ -112,6 +112,10 @@ func evaluateErrorRateAlertRule(rule *model.ErrorRateAlertRule) error {
 	}
 
 	errorRate := result.ErrorRate
+	// 总请求数不足最低要求，视为正常（避免小样本误告警）
+	if rule.MinRequestCount > 0 && result.Total < rule.MinRequestCount {
+		return model.MarkErrorRateAlertRuleScanned(rule.Id, errorRate, model.ErrorRateAlertStateNormal, false)
+	}
 	// 错误率低于阈值，清除告警状态
 	if errorRate < rule.Threshold {
 		return model.MarkErrorRateAlertRuleScanned(rule.Id, errorRate, model.ErrorRateAlertStateNormal, false)
@@ -143,11 +147,16 @@ func SendErrorRateAlert(rule *model.ErrorRateAlertRule, result *model.ErrorRateR
 		rule.TimeWindow, result.ErrorRate, rule.Threshold)
 
 	// 构造告警内容
+	minReqLine := ""
+	if rule.MinRequestCount > 0 {
+		minReqLine = fmt.Sprintf("最低请求数: %d\n", rule.MinRequestCount)
+	}
 	content := fmt.Sprintf(
 		"规则名称: %s\n"+
 			"监控范围: %s\n"+
 			"时间窗口: %s\n"+
 			"错误率阈值: %.2f%%\n"+
+			"%s"+
 			"当前错误率: %.2f%%\n"+
 			"错误请求数: %d\n"+
 			"成功请求数: %d\n"+
@@ -156,6 +165,7 @@ func SendErrorRateAlert(rule *model.ErrorRateAlertRule, result *model.ErrorRateR
 		getScopeDisplay(rule.Scope, rule.ScopeValue),
 		rule.TimeWindow,
 		rule.Threshold,
+		minReqLine,
 		result.ErrorRate,
 		result.ErrorCount,
 		result.SuccessCount,
@@ -187,12 +197,16 @@ func SendErrorRateAlertTest(rule *model.ErrorRateAlertRule, result *model.ErrorR
 	message := fmt.Sprintf("[测试] 【错误率告警】%s 内错误率达到 %.2f%%，超过阈值 %.2f%%",
 		rule.TimeWindow, result.ErrorRate, rule.Threshold)
 
-	// 构造告警内容
+	testMinReqLine := ""
+	if rule.MinRequestCount > 0 {
+		testMinReqLine = fmt.Sprintf("最低请求数: %d\n", rule.MinRequestCount)
+	}
 	content := fmt.Sprintf(
 		"规则名称: %s\n"+
 			"监控范围: %s\n"+
 			"时间窗口: %s\n"+
 			"错误率阈值: %.2f%%\n"+
+			"%s"+
 			"当前错误率: %.2f%%\n"+
 			"错误请求数: %d\n"+
 			"成功请求数: %d\n"+
@@ -202,6 +216,7 @@ func SendErrorRateAlertTest(rule *model.ErrorRateAlertRule, result *model.ErrorR
 		getScopeDisplay(rule.Scope, rule.ScopeValue),
 		rule.TimeWindow,
 		rule.Threshold,
+		testMinReqLine,
 		result.ErrorRate,
 		result.ErrorCount,
 		result.SuccessCount,
