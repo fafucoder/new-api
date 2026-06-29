@@ -79,6 +79,14 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   // ========== 缓存命中率数据 ==========
   const [cacheHitStats, setCacheHitStats] = useState({ today: null, lifetime: null });
 
+  // ========== 管理员用户查询 ==========
+  const [adminQueryActive, setAdminQueryActive] = useState(false);
+  const [adminQueryUsername, setAdminQueryUsername] = useState('');
+  const [adminQueryRange, setAdminQueryRange] = useState('7d');
+  const [adminQueryLabel, setAdminQueryLabel] = useState('');
+  const [adminQueryResult, setAdminQueryResult] = useState(null);
+  const [adminQueryLoading, setAdminQueryLoading] = useState(false);
+
   // ========== Uptime 数据 ==========
   const [uptimeData, setUptimeData] = useState([]);
   const [uptimeLoading, setUptimeLoading] = useState(false);
@@ -251,6 +259,40 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     }
   }, []);
 
+  const loadAdminUserStats = useCallback(async (username, timeOpts) => {
+    setAdminQueryLoading(true);
+    try {
+      let url = `/api/dashboard/user_stats?username=${encodeURIComponent(username)}`;
+      if (timeOpts.startTimestamp && timeOpts.endTimestamp) {
+        url += `&start_timestamp=${timeOpts.startTimestamp}&end_timestamp=${timeOpts.endTimestamp}`;
+      } else {
+        url += `&range=${timeOpts.range || '7d'}`;
+      }
+      const res = await API.get(url);
+      if (res.data.success) {
+        setAdminQueryResult(res.data.data);
+        setAdminQueryUsername(username);
+        setAdminQueryRange(timeOpts.range || 'custom');
+        setAdminQueryLabel(timeOpts.label || '');
+        setAdminQueryActive(true);
+      } else {
+        showError(res.data.message || t('查询失败'));
+      }
+    } catch (e) {
+      showError(t('查询失败'));
+    } finally {
+      setAdminQueryLoading(false);
+    }
+  }, [t]);
+
+  const resetAdminQuery = useCallback(() => {
+    setAdminQueryActive(false);
+    setAdminQueryUsername('');
+    setAdminQueryRange('7d');
+    setAdminQueryLabel('');
+    setAdminQueryResult(null);
+  }, []);
+
   const getUserData = useCallback(async () => {
     let res = await API.get(`/api/user/self`);
     const { success, message, data } = res.data;
@@ -335,6 +377,16 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
 
     // 缓存命中率
     cacheHitStats,
+
+    // 管理员用户查询
+    adminQueryActive,
+    adminQueryUsername,
+    adminQueryRange,
+    adminQueryLabel,
+    adminQueryResult,
+    adminQueryLoading,
+    loadAdminUserStats,
+    resetAdminQuery,
 
     // 计算值
     timeOptions,

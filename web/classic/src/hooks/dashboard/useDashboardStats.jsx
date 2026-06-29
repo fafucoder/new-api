@@ -44,6 +44,8 @@ export const useDashboardStats = (
   navigate,
   t,
   cacheHitStats,
+  adminQueryActive,
+  adminQueryResult,
 ) => {
   const theme = useActualTheme();
   
@@ -104,120 +106,147 @@ export const useDashboardStats = (
   };
 
   const groupedStatsData = useMemo(
-    () => [
-      {
-        title: createSectionTitle(Wallet, t('账户数据')),
-        color: getThemeBgColor(),
-        items: [
-          {
-            title: t('当前余额'),
-            value: renderQuota(userState?.user?.quota),
-            icon: <IconMoneyExchangeStroked />,
-            avatarColor: 'blue',
-            trendData: [],
-            trendColor: '#3b82f6',
-          },
-          {
-            title: t('历史消耗'),
-            value: renderQuota(userState?.user?.used_quota),
-            icon: <IconHistogram />,
-            avatarColor: 'purple',
-            trendData: [],
-            trendColor: '#8b5cf6',
-          },
-        ],
-      },
-      {
-        title: createSectionTitle(BarChart2, t('缓存数据')),
-        color: getThemeBgColor(),
-        items: [
-          {
-            title: t('今日缓存命中率'),
-            value: fmtRate(cacheHitStats?.today?.hit_rate),
-            icon: <IconPulse />,
-            avatarColor: 'teal',
-            trendData: [],
-            trendColor: '#14b8a6',
-            tooltip: cacheTooltip(cacheHitStats?.today),
-          },
-          {
-            title: t('历史缓存命中率'),
-            value: fmtRate(cacheHitStats?.lifetime?.hit_rate),
-            icon: <IconHistogram />,
-            avatarColor: 'cyan',
-            trendData: [],
-            trendColor: '#06b6d4',
-            tooltip: cacheTooltip(cacheHitStats?.lifetime),
-          },
-        ],
-      },
-      {
-        title: createSectionTitle(Activity, t('使用统计')),
-        color: getThemeBgColor(),
-        items: [
-          {
-            title: t('请求次数'),
-            value: userState.user?.request_count,
-            icon: <IconSend />,
-            avatarColor: 'green',
-            trendData: [],
-            trendColor: '#10b981',
-          },
-          {
-            title: t('统计次数'),
-            value: times,
-            icon: <IconPulse />,
-            avatarColor: 'cyan',
-            trendData: trendData.times,
-            trendColor: '#06b6d4',
-          },
-        ],
-      },
-      {
-        title: createSectionTitle(Zap, t('资源消耗')),
-        color: getThemeBgColor(),
-        items: [
-          {
-            title: t('统计额度'),
-            value: renderQuota(consumeQuota),
-            icon: <IconCoinMoneyStroked />,
-            avatarColor: 'yellow',
-            trendData: trendData.consumeQuota,
-            trendColor: '#f59e0b',
-          },
-          {
-            title: t('统计Tokens'),
-            value: isNaN(consumeTokens) ? 0 : consumeTokens.toLocaleString(),
-            icon: <IconTextStroked />,
-            avatarColor: 'pink',
-            trendData: trendData.tokens,
-            trendColor: '#ec4899',
-          },
-        ],
-      },
-      {
-        title: createSectionTitle(Gauge, t('性能指标')),
-        color: getThemeBgColor(),
-        items: [
-          {
-            title: t('平均RPM'),
-            value: performanceMetrics.avgRPM,
-            icon: <IconStopwatchStroked />,
-            avatarColor: 'indigo',
-            trendData: trendData.rpm,
-            trendColor: '#6366f1',
-          },
-          {
-            title: t('平均TPM'),
-            value: performanceMetrics.avgTPM,
-            icon: <IconTypograph />,
-            avatarColor: 'orange',
-            trendData: trendData.tpm,
-            trendColor: '#f97316',
-          },
-        ],
-      },
-    ],
+    () => {
+      const accountQuota = adminQueryActive && adminQueryResult?.user
+        ? adminQueryResult.user.quota
+        : userState?.user?.quota;
+      const accountUsedQuota = adminQueryActive && adminQueryResult?.user
+        ? adminQueryResult.user.used_quota
+        : userState?.user?.used_quota;
+      const accountRequestCount = adminQueryActive && adminQueryResult?.user
+        ? adminQueryResult.user.request_count
+        : userState?.user?.request_count;
+
+      const cacheStats = adminQueryActive && adminQueryResult?.cache_hit_stats
+        ? {
+            today: adminQueryResult.cache_hit_stats,
+            lifetime: null,
+          }
+        : cacheHitStats;
+
+      const cacheLabel1 = adminQueryActive ? t('区间缓存命中率') : t('今日缓存命中率');
+      const cacheLabel2 = adminQueryActive ? null : t('历史缓存命中率');
+
+      const cacheItems = [
+        {
+          title: cacheLabel1,
+          value: fmtRate(cacheStats?.today?.hit_rate),
+          icon: <IconPulse />,
+          avatarColor: 'teal',
+          trendData: [],
+          trendColor: '#14b8a6',
+          tooltip: cacheTooltip(cacheStats?.today),
+        },
+      ];
+
+      if (!adminQueryActive) {
+        cacheItems.push({
+          title: cacheLabel2,
+          value: fmtRate(cacheStats?.lifetime?.hit_rate),
+          icon: <IconHistogram />,
+          avatarColor: 'cyan',
+          trendData: [],
+          trendColor: '#06b6d4',
+          tooltip: cacheTooltip(cacheStats?.lifetime),
+        });
+      }
+
+      return [
+        {
+          title: createSectionTitle(Wallet, t('账户数据')),
+          color: getThemeBgColor(),
+          items: [
+            {
+              title: t('当前余额'),
+              value: renderQuota(accountQuota),
+              icon: <IconMoneyExchangeStroked />,
+              avatarColor: 'blue',
+              trendData: [],
+              trendColor: '#3b82f6',
+            },
+            {
+              title: t('历史消耗'),
+              value: renderQuota(accountUsedQuota),
+              icon: <IconHistogram />,
+              avatarColor: 'purple',
+              trendData: [],
+              trendColor: '#8b5cf6',
+            },
+          ],
+        },
+        {
+          title: createSectionTitle(BarChart2, t('缓存数据')),
+          color: getThemeBgColor(),
+          items: cacheItems,
+        },
+        {
+          title: createSectionTitle(Activity, t('使用统计')),
+          color: getThemeBgColor(),
+          items: [
+            {
+              title: t('请求次数'),
+              value: accountRequestCount,
+              icon: <IconSend />,
+              avatarColor: 'green',
+              trendData: [],
+              trendColor: '#10b981',
+            },
+            {
+              title: t('统计次数'),
+              value: times,
+              icon: <IconPulse />,
+              avatarColor: 'cyan',
+              trendData: trendData.times,
+              trendColor: '#06b6d4',
+            },
+          ],
+        },
+        {
+          title: createSectionTitle(Zap, t('资源消耗')),
+          color: getThemeBgColor(),
+          items: [
+            {
+              title: t('统计额度'),
+              value: renderQuota(consumeQuota),
+              icon: <IconCoinMoneyStroked />,
+              avatarColor: 'yellow',
+              trendData: trendData.consumeQuota,
+              trendColor: '#f59e0b',
+            },
+            {
+              title: t('统计Tokens'),
+              value: isNaN(consumeTokens) ? 0 : consumeTokens.toLocaleString(),
+              icon: <IconTextStroked />,
+              avatarColor: 'pink',
+              trendData: trendData.tokens,
+              trendColor: '#ec4899',
+            },
+          ],
+        },
+        {
+          title: createSectionTitle(Gauge, t('性能指标')),
+          color: getThemeBgColor(),
+          items: [
+            {
+              title: t('平均RPM'),
+              value: performanceMetrics.avgRPM,
+              icon: <IconStopwatchStroked />,
+              avatarColor: 'indigo',
+              trendData: trendData.rpm,
+              trendColor: '#6366f1',
+            },
+            {
+              title: t('平均TPM'),
+              value: performanceMetrics.avgTPM,
+              icon: <IconTypograph />,
+              avatarColor: 'orange',
+              trendData: trendData.tpm,
+              trendColor: '#f97316',
+            },
+          ],
+        },
+      ];
+    },
     [
       userState?.user?.quota,
       userState?.user?.used_quota,
@@ -231,6 +260,8 @@ export const useDashboardStats = (
       t,
       cacheHitStats,
       theme,
+      adminQueryActive,
+      adminQueryResult,
     ],
   );
 

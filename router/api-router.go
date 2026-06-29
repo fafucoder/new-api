@@ -371,6 +371,9 @@ func SetApiRouter(router *gin.Engine) {
 		dataRoute.GET("/users", middleware.AdminAuth(), controller.GetQuotaDatesByUser)
 		dataRoute.GET("/self", middleware.UserAuth(), controller.GetUserQuotaDates)
 
+		dashboardRoute := apiRouter.Group("/dashboard")
+		dashboardRoute.GET("/user_stats", middleware.AdminAuth(), controller.GetUserDashboardStats)
+
 		cacheHitRoute := apiRouter.Group("/cache_hit_stats")
 		cacheHitRoute.GET("/me", middleware.UserAuth(), controller.GetMyCacheHitStats)
 		cacheHitRoute.GET("/by_channel_model", middleware.AdminAuth(), controller.GetByChannelModelCacheHitStats)

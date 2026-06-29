@@ -85,6 +85,8 @@ const Dashboard = () => {
     dashboardData.navigate,
     dashboardData.t,
     dashboardData.cacheHitStats,
+    dashboardData.adminQueryActive,
+    dashboardData.adminQueryResult,
   );
 
   // ========== 数据处理 ==========
@@ -161,6 +163,11 @@ const Dashboard = () => {
         refresh={handleRefresh}
         loading={dashboardData.loading}
         t={dashboardData.t}
+        isAdminUser={dashboardData.isAdminUser}
+        onAdminQuery={dashboardData.loadAdminUserStats}
+        onAdminReset={dashboardData.resetAdminQuery}
+        adminQueryLoading={dashboardData.adminQueryLoading}
+        adminQueryActive={dashboardData.adminQueryActive}
       />
 
       <SearchModal
