@@ -118,18 +118,12 @@ export const useDashboardStats = (
         : userState?.user?.request_count;
 
       const cacheStats = adminQueryActive && adminQueryResult?.cache_hit_stats
-        ? {
-            today: adminQueryResult.cache_hit_stats,
-            lifetime: null,
-          }
+        ? adminQueryResult.cache_hit_stats
         : cacheHitStats;
-
-      const cacheLabel1 = adminQueryActive ? t('区间缓存命中率') : t('今日缓存命中率');
-      const cacheLabel2 = adminQueryActive ? null : t('历史缓存命中率');
 
       const cacheItems = [
         {
-          title: cacheLabel1,
+          title: t('今日缓存命中率'),
           value: fmtRate(cacheStats?.today?.hit_rate),
           icon: <IconPulse />,
           avatarColor: 'teal',
@@ -137,19 +131,16 @@ export const useDashboardStats = (
           trendColor: '#14b8a6',
           tooltip: cacheTooltip(cacheStats?.today),
         },
-      ];
-
-      if (!adminQueryActive) {
-        cacheItems.push({
-          title: cacheLabel2,
+        {
+          title: t('历史缓存命中率'),
           value: fmtRate(cacheStats?.lifetime?.hit_rate),
           icon: <IconHistogram />,
           avatarColor: 'cyan',
           trendData: [],
           trendColor: '#06b6d4',
           tooltip: cacheTooltip(cacheStats?.lifetime),
-        });
-      }
+        },
+      ];
 
       return [
         {

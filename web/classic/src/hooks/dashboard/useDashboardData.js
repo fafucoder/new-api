@@ -270,16 +270,20 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
       }
       const res = await API.get(url);
       if (res.data.success) {
-        setAdminQueryResult(res.data.data);
+        const result = res.data.data;
+        setAdminQueryResult(result);
         setAdminQueryUsername(username);
         setAdminQueryRange(timeOpts.range || 'custom');
         setAdminQueryLabel(timeOpts.label || '');
         setAdminQueryActive(true);
+        return result;
       } else {
         showError(res.data.message || t('查询失败'));
+        return null;
       }
     } catch (e) {
       showError(t('查询失败'));
+      return null;
     } finally {
       setAdminQueryLoading(false);
     }

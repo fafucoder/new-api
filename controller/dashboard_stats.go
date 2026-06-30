@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"math"
 	"strconv"
 	"time"
 
@@ -45,28 +44,27 @@ func GetUserDashboardStats(c *gin.Context) {
 		}
 	}
 
-	cacheAgg, err := model.AggregateCacheHitStatsByUser(user.Id, start, end)
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
+	todayCache, err := model.AggregateCacheHitStatsByUser(user.Id, todayStart, 0)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	lifetimeCache, err := model.AggregateCacheHitStatsByUser(user.Id, 0, 0)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	rangeCache, err := model.AggregateCacheHitStatsByUser(user.Id, start, end)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 
-	var cacheHitRate any
-	if cacheAgg.Total > 0 {
-		cacheHitRate = math.Round(float64(cacheAgg.CacheRead)/float64(cacheAgg.Total)*10000) / 100
-	}
-
-	quotaRows, err := model.GetQuotaDataByUserId(user.Id, start, end)
+	quotaData, err := model.GetQuotaDataByUsername(username, start, end)
 	if err != nil {
 		common.ApiError(c, err)
 		return
-	}
-
-	var totalQuota, totalTokens, totalCount int
-	for _, row := range quotaRows {
-		totalQuota += row.Quota
-		totalTokens += row.TokenUsed
-		totalCount += row.Count
 	}
 
 	common.ApiSuccess(c, gin.H{
@@ -78,17 +76,10 @@ func GetUserDashboardStats(c *gin.Context) {
 			"request_count": user.RequestCount,
 		},
 		"cache_hit_stats": gin.H{
-			"cache_read":    cacheAgg.CacheRead,
-			"input":         cacheAgg.Input,
-			"cache_write":   cacheAgg.CacheWrite,
-			"total":         cacheAgg.Total,
-			"hit_rate":      cacheHitRate,
-			"request_count": cacheAgg.RequestCount,
+			"today":    aggToMap(todayCache),
+			"lifetime": aggToMap(lifetimeCache),
+			"range":    aggToMap(rangeCache),
 		},
-		"quota_stats": gin.H{
-			"total_quota":  totalQuota,
-			"total_tokens": totalTokens,
-			"total_count":  totalCount,
-		},
+		"quota_data": quotaData,
 	})
 }

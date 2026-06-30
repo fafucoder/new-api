@@ -149,6 +149,28 @@ const Dashboard = () => {
     }),
   );
 
+  const handleAdminQuery = async (username, timeOpts) => {
+    const result = await dashboardData.loadAdminUserStats(username, timeOpts);
+    if (result && result.quota_data) {
+      const data = result.quota_data;
+      if (data.length === 0) {
+        data.push({
+          count: 0,
+          model_name: '无数据',
+          quota: 0,
+          created_at: Date.now() / 1000,
+        });
+      }
+      data.sort((a, b) => a.created_at - b.created_at);
+      dashboardCharts.updateChartData(data);
+    }
+  };
+
+  const handleAdminReset = async () => {
+    dashboardData.resetAdminQuery();
+    await initChart();
+  };
+
   // ========== Effects ==========
   useEffect(() => {
     initChart();
@@ -164,8 +186,8 @@ const Dashboard = () => {
         loading={dashboardData.loading}
         t={dashboardData.t}
         isAdminUser={dashboardData.isAdminUser}
-        onAdminQuery={dashboardData.loadAdminUserStats}
-        onAdminReset={dashboardData.resetAdminQuery}
+        onAdminQuery={handleAdminQuery}
+        onAdminReset={handleAdminReset}
         adminQueryLoading={dashboardData.adminQueryLoading}
         adminQueryActive={dashboardData.adminQueryActive}
       />
