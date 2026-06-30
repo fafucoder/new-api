@@ -93,6 +93,45 @@ const SearchActions = memo(
           <>
             <Divider layout='vertical' margin='8px' />
 
+            {/* 充值价格显示开关 */}
+            {supportsCurrencyDisplay && (
+              <div className='flex items-center gap-2'>
+                <span className='text-sm text-gray-600'>{t('充值价格显示')}</span>
+                <Switch
+                  checked={showWithRecharge}
+                  onChange={setShowWithRecharge}
+                />
+              </div>
+            )}
+
+            {/* 货币单位选择 */}
+            {supportsCurrencyDisplay && showWithRecharge && (
+              <Select
+                value={currency}
+                onChange={setCurrency}
+                optionList={[
+                  { value: 'USD', label: 'USD' },
+                  { value: 'CNY', label: 'CNY' },
+                  { value: 'CUSTOM', label: t('自定义货币') },
+                ]}
+              />
+            )}
+
+            {/* 显示倍率开关 */}
+            <div className='flex items-center gap-2'>
+              <span className='text-sm text-gray-600'>{t('倍率')}</span>
+              <Switch checked={showRatio} onChange={setShowRatio} />
+            </div>
+
+            {/* 视图模式切换按钮 */}
+            <Button
+              theme={viewMode === 'table' ? 'solid' : 'outline'}
+              type={viewMode === 'table' ? 'primary' : 'tertiary'}
+              onClick={handleViewModeToggle}
+            >
+              {t('表格视图')}
+            </Button>
+
             {/* Token单位切换按钮 */}
             <Button
               theme={tokenUnit === 'K' ? 'solid' : 'outline'}
