@@ -118,12 +118,15 @@ export const useDashboardStats = (
         : userState?.user?.request_count;
 
       const cacheStats = adminQueryActive && adminQueryResult?.cache_hit_stats
-        ? adminQueryResult.cache_hit_stats
+        ? {
+            today: adminQueryResult.cache_hit_stats.range,
+            lifetime: adminQueryResult.cache_hit_stats.lifetime,
+          }
         : cacheHitStats;
 
       const cacheItems = [
         {
-          title: t('今日缓存命中率'),
+          title: adminQueryActive ? t('所选范围缓存命中率') : t('今日缓存命中率'),
           value: fmtRate(cacheStats?.today?.hit_rate),
           icon: <IconPulse />,
           avatarColor: 'teal',
@@ -156,7 +159,7 @@ export const useDashboardStats = (
               trendColor: '#3b82f6',
             },
             {
-              title: t('历史消耗'),
+              title: adminQueryActive ? t('所选范围消耗') : t('历史消耗'),
               value: renderQuota(accountUsedQuota),
               icon: <IconHistogram />,
               avatarColor: 'purple',
@@ -175,7 +178,7 @@ export const useDashboardStats = (
           color: getThemeBgColor(),
           items: [
             {
-              title: t('请求次数'),
+              title: adminQueryActive ? t('所选范围请求次数') : t('请求次数'),
               value: accountRequestCount,
               icon: <IconSend />,
               avatarColor: 'green',
