@@ -67,13 +67,20 @@ func GetUserDashboardStats(c *gin.Context) {
 		return
 	}
 
+	var rangeUsedQuota int
+	var rangeRequestCount int
+	for _, qd := range quotaData {
+		rangeUsedQuota += qd.Quota
+		rangeRequestCount += qd.Count
+	}
+
 	common.ApiSuccess(c, gin.H{
 		"user": gin.H{
 			"id":            user.Id,
 			"username":      user.Username,
 			"quota":         user.Quota,
-			"used_quota":    user.UsedQuota,
-			"request_count": user.RequestCount,
+			"used_quota":    rangeUsedQuota,
+			"request_count": rangeRequestCount,
 		},
 		"cache_hit_stats": gin.H{
 			"today":    aggToMap(todayCache),
