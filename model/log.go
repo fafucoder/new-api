@@ -509,6 +509,56 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	return token
 }
 
+// SumUsedRequestCount 统计指定用户在时间范围内真实的消费请求次数（基于 logs 表）
+func SumUsedRequestCount(startTimestamp int64, endTimestamp int64, username string) (count int) {
+	tx := LOG_DB.Table("logs")
+	if username != "" {
+		tx = tx.Where("username = ?", username)
+	}
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+	var total int64
+	tx.Where("type = ?", LogTypeConsume).Count(&total)
+	return int(total)
+}
+
+// LogQuotaDataByModel 按模型和时间（精确到小时）分组统计真实消耗（基于 logs 表）
+type LogQuotaDataByModel struct {
+	ModelName string `json:"model_name"`
+	CreatedAt int64  `json:"created_at"` // 精确到小时的 unix 时间戳
+	Quota     int    `json:"quota"`
+	Count     int    `json:"count"`
+	TokenUsed int    `json:"token_used"`
+}
+
+// SumUsedQuotaGroupByModel 按用户、时间范围、模型分组统计真实消耗（返回按小时+模型聚合的数据）
+func SumUsedQuotaGroupByModel(startTimestamp int64, endTimestamp int64, username string) ([]LogQuotaDataByModel, error) {
+	var result []LogQuotaDataByModel
+	tx := LOG_DB.Table("logs").
+		Select("model_name, (created_at - created_at % 3600) as created_at, sum(quota) as quota, count(*) as count, sum(prompt_tokens) + sum(completion_tokens) as token_used").
+		Where("type = ?", LogTypeConsume)
+
+	if username != "" {
+		tx = tx.Where("username = ?", username)
+	}
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+
+	err := tx.Group("model_name, (created_at - created_at % 3600)").
+		Order("created_at, model_name").
+		Find(&result).Error
+
+	return result, err
+}
+
 func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {
 	var total int64 = 0
 
