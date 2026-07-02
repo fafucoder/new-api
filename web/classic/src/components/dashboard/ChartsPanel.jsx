@@ -18,9 +18,10 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Tabs, TabPane } from '@douyinfe/semi-ui';
+import { Card, Tabs, TabPane, Table, Empty } from '@douyinfe/semi-ui';
 import { PieChart } from 'lucide-react';
 import { VChart } from '@visactor/react-vchart';
+import { renderQuota } from '../../helpers/render';
 
 const ChartsPanel = ({
   activeChartTab,
@@ -31,7 +32,9 @@ const ChartsPanel = ({
   spec_rank_bar,
   spec_user_rank,
   spec_user_trend,
+  modelSummary,
   isAdminUser,
+  adminQueryActive,
   CARD_PROPS,
   CHART_CONFIG,
   FLEX_CENTER_GAP2,
@@ -53,6 +56,9 @@ const ChartsPanel = ({
             activeKey={activeChartTab}
             onChange={setActiveChartTab}
           >
+            {adminQueryActive && modelSummary && (
+              <TabPane tab={<span>{t('模型消耗统计')}</span>} itemKey='0' />
+            )}
             <TabPane tab={<span>{t('消耗分布')}</span>} itemKey='1' />
             <TabPane tab={<span>{t('调用趋势')}</span>} itemKey='2' />
             <TabPane tab={<span>{t('调用次数分布')}</span>} itemKey='3' />
@@ -69,6 +75,50 @@ const ChartsPanel = ({
       bodyStyle={{ padding: 0 }}
     >
       <div className='h-96 p-2'>
+        {activeChartTab === '0' && adminQueryActive && modelSummary && (
+          <div className='h-full overflow-auto'>
+            <Table
+              dataSource={modelSummary}
+              pagination={false}
+              size='small'
+              columns={[
+                {
+                  title: t('模型名称'),
+                  dataIndex: 'model_name',
+                  key: 'model_name',
+                  width: 200,
+                },
+                {
+                  title: t('消耗额度'),
+                  dataIndex: 'quota',
+                  key: 'quota',
+                  render: (quota) => renderQuota(quota),
+                  sorter: (a, b) => a.quota - b.quota,
+                },
+                {
+                  title: t('请求次数'),
+                  dataIndex: 'count',
+                  key: 'count',
+                  render: (count) => count?.toLocaleString() || 0,
+                  sorter: (a, b) => a.count - b.count,
+                },
+                {
+                  title: t('Token用量'),
+                  dataIndex: 'token_used',
+                  key: 'token_used',
+                  render: (tokens) => tokens?.toLocaleString() || 0,
+                  sorter: (a, b) => a.token_used - b.token_used,
+                },
+              ]}
+              empty={
+                <Empty
+                  description={t('暂无数据')}
+                  style={{ padding: '40px 0' }}
+                />
+              }
+            />
+          </div>
+        )}
         {activeChartTab === '1' && (
           <VChart spec={spec_line} option={CHART_CONFIG} />
         )}

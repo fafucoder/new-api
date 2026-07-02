@@ -227,7 +227,9 @@ const Dashboard = () => {
             spec_rank_bar={dashboardCharts.spec_rank_bar}
             spec_user_rank={dashboardCharts.spec_user_rank}
             spec_user_trend={dashboardCharts.spec_user_trend}
+            modelSummary={dashboardData.adminQueryResult?.model_summary || null}
             isAdminUser={dashboardData.isAdminUser}
+            adminQueryActive={dashboardData.adminQueryActive}
             CARD_PROPS={CARD_PROPS}
             CHART_CONFIG={CHART_CONFIG}
             FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}
