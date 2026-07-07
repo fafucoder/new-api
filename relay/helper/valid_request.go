@@ -144,17 +144,37 @@ func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageReq
 	switch relayMode {
 	case relayconstant.RelayModeImagesEdits:
 		if strings.Contains(c.Request.Header.Get("Content-Type"), "multipart/form-data") {
-			_, err := c.MultipartForm()
+			form, err := c.MultipartForm()
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse image edit form request: %w", err)
 			}
-			formData := c.Request.PostForm
-			imageRequest.Prompt = formData.Get("prompt")
-			imageRequest.Model = formData.Get("model")
-			imageRequest.N = common.GetPointer(uint(common.String2Int(formData.Get("n"))))
-			imageRequest.Quality = formData.Get("quality")
-			imageRequest.Size = formData.Get("size")
-			if imageValue := formData.Get("image"); imageValue != "" {
+			// Read fields from the parsed multipart form values rather than
+			// c.Request.PostForm: when the form was pre-parsed and cached on the
+			// request (see common.parseMultipartFormData), gin's MultipartForm()
+			// returns the cache without populating PostForm, so PostForm would be
+			// empty here.
+			getField := func(key string) string {
+				if form != nil {
+					if vals, ok := form.Value[key]; ok && len(vals) > 0 {
+						return vals[0]
+					}
+				}
+				return ""
+			}
+			hasField := func(key string) bool {
+				if form != nil {
+					_, ok := form.Value[key]
+					return ok
+				}
+				return false
+			}
+
+			imageRequest.Prompt = getField("prompt")
+			imageRequest.Model = getField("model")
+			imageRequest.N = common.GetPointer(uint(common.String2Int(getField("n"))))
+			imageRequest.Quality = getField("quality")
+			imageRequest.Size = getField("size")
+			if imageValue := getField("image"); imageValue != "" {
 				imageRequest.Image, _ = common.Marshal(imageValue)
 			}
 
@@ -167,9 +187,8 @@ func GetAndValidOpenAIImageRequest(c *gin.Context, relayMode int) (*dto.ImageReq
 				imageRequest.N = common.GetPointer(uint(1))
 			}
 
-			hasWatermark := formData.Has("watermark")
-			if hasWatermark {
-				watermark := formData.Get("watermark") == "true"
+			if hasField("watermark") {
+				watermark := getField("watermark") == "true"
 				imageRequest.Watermark = &watermark
 			}
 			break

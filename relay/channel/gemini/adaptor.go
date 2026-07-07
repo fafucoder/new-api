@@ -58,8 +58,14 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
+	// image-capable gemini models (nanobanana, e.g. gemini-3.1-flash-image-preview)
+	// use the standard generateContent endpoint and support both generations and edits.
+	if model_setting.IsGeminiModelSupportImagine(info.UpstreamModelName) {
+		return convertImagineImageRequest(c, info, request)
+	}
+
 	if !strings.HasPrefix(info.UpstreamModelName, "imagen") {
-		return nil, errors.New("not supported model for image generation, only imagen models are supported")
+		return nil, errors.New("not supported model for image generation, only imagen and image-capable gemini models are supported")
 	}
 
 	// convert size to aspect ratio but allow user to specify aspect ratio
@@ -172,6 +178,13 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
 	channel.SetupApiRequestHeader(info, c, req)
+	// The upstream Gemini request body is always JSON (even for the OpenAI
+	// images/edits endpoint, where the inbound request is multipart/form-data).
+	// SetupApiRequestHeader copies the inbound Content-Type verbatim, which would
+	// forward "multipart/form-data; boundary=..." to Gemini and make it try to
+	// parse our JSON body as multipart -> "multipart: NextPart: bufio: buffer full".
+	// Force JSON so the declared Content-Type matches the actual body.
+	req.Set("Content-Type", "application/json")
 	req.Set("x-goog-api-key", info.ApiKey)
 	return nil
 }
@@ -257,6 +270,13 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 		} else {
 			return GeminiTextGenerationHandler(c, info, resp)
 		}
+	}
+
+	if info.RelayMode == constant.RelayModeImagesGenerations || info.RelayMode == constant.RelayModeImagesEdits {
+		if model_setting.IsGeminiModelSupportImagine(info.UpstreamModelName) {
+			return GeminiImageGenerationHandler(c, info, resp)
+		}
+		return GeminiImageHandler(c, info, resp)
 	}
 
 	if strings.HasPrefix(info.UpstreamModelName, "imagen") {
