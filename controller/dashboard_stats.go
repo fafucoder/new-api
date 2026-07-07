@@ -61,7 +61,24 @@ func GetUserDashboardStats(c *gin.Context) {
 		return
 	}
 
-	quotaData, err := model.GetQuotaDataByUsername(username, start, end)
+	// 真实消耗数据基于 logs 表统计
+	stat, err := model.SumUsedQuota(model.LogTypeConsume, start, end, "", username, "", 0, "")
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	rangeUsedQuota := stat.Quota
+	rangeRequestCount := model.SumUsedRequestCount(start, end, username)
+
+	// 按模型分组的真实消耗数据（含时间维度，用于图表）
+	quotaDataByModel, err := model.SumUsedQuotaGroupByModel(start, end, username)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	// 按模型汇总的消耗排行（不含时间维度，用于统计表格）
+	modelSummary, err := model.SumUsedQuotaByModel(start, end, username)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -87,6 +104,7 @@ func GetUserDashboardStats(c *gin.Context) {
 			"lifetime": aggToMap(lifetimeCache),
 			"range":    aggToMap(rangeCache),
 		},
-		"quota_data": quotaData,
+		"quota_data":    quotaDataByModel,
+		"model_summary": modelSummary,
 	})
 }

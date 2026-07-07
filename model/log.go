@@ -19,10 +19,10 @@ import (
 type Log struct {
 	Id               int    `json:"id" gorm:"index:idx_created_at_id,priority:1;index:idx_user_id_id,priority:2"`
 	UserId           int    `json:"user_id" gorm:"index;index:idx_user_id_id,priority:1"`
-	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type"`
-	Type             int    `json:"type" gorm:"index:idx_created_at_type"`
+	CreatedAt        int64  `json:"created_at" gorm:"bigint;index:idx_created_at_id,priority:2;index:idx_created_at_type;index:idx_type_username_created_at,priority:3"`
+	Type             int    `json:"type" gorm:"index:idx_created_at_type;index:idx_type_username_created_at,priority:1"`
 	Content          string `json:"content"`
-	Username         string `json:"username" gorm:"index;index:index_username_model_name,priority:2;default:''"`
+	Username         string `json:"username" gorm:"index;index:index_username_model_name,priority:2;index:idx_type_username_created_at,priority:2;default:''"`
 	TokenName        string `json:"token_name" gorm:"index;default:''"`
 	ModelName        string `json:"model_name" gorm:"index;index:index_username_model_name,priority:1;default:''"`
 	Quota            int    `json:"quota" gorm:"default:0"`
@@ -507,6 +507,88 @@ func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	}
 	tx.Where("type = ?", LogTypeConsume).Scan(&token)
 	return token
+}
+
+// SumUsedRequestCount 统计指定用户在时间范围内真实的消费请求次数（基于 logs 表）
+func SumUsedRequestCount(startTimestamp int64, endTimestamp int64, username string) (count int) {
+	tx := LOG_DB.Table("logs")
+	if username != "" {
+		tx = tx.Where("username = ?", username)
+	}
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+	var total int64
+	tx.Where("type = ?", LogTypeConsume).Count(&total)
+	return int(total)
+}
+
+// LogQuotaDataByModel 按模型和时间（精确到小时）分组统计真实消耗（基于 logs 表）
+type LogQuotaDataByModel struct {
+	ModelName string `json:"model_name"`
+	CreatedAt int64  `json:"created_at"` // 精确到小时的 unix 时间戳
+	Quota     int    `json:"quota"`
+	Count     int    `json:"count"`
+	TokenUsed int    `json:"token_used"`
+}
+
+// SumUsedQuotaGroupByModel 按用户、时间范围、模型分组统计真实消耗（返回按小时+模型聚合的数据）
+func SumUsedQuotaGroupByModel(startTimestamp int64, endTimestamp int64, username string) ([]LogQuotaDataByModel, error) {
+	var result []LogQuotaDataByModel
+	tx := LOG_DB.Table("logs").
+		Select("model_name, (created_at - created_at % 3600) as created_at, sum(quota) as quota, count(*) as count, sum(prompt_tokens) + sum(completion_tokens) as token_used").
+		Where("type = ?", LogTypeConsume)
+
+	if username != "" {
+		tx = tx.Where("username = ?", username)
+	}
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+
+	err := tx.Group("model_name, (created_at - created_at % 3600)").
+		Order("created_at, model_name").
+		Find(&result).Error
+
+	return result, err
+}
+
+// ModelQuotaSummary 按模型汇总真实消耗（不按时间细分）
+type ModelQuotaSummary struct {
+	ModelName string `json:"model_name"`
+	Quota     int    `json:"quota"`
+	Count     int    `json:"count"`
+	TokenUsed int    `json:"token_used"`
+}
+
+// SumUsedQuotaByModel 按用户、时间范围统计各模型的总消耗（返回模型排行，不含时间维度）
+func SumUsedQuotaByModel(startTimestamp int64, endTimestamp int64, username string) ([]ModelQuotaSummary, error) {
+	var result []ModelQuotaSummary
+	tx := LOG_DB.Table("logs").
+		Select("model_name, sum(quota) as quota, count(*) as count, sum(prompt_tokens) + sum(completion_tokens) as token_used").
+		Where("type = ?", LogTypeConsume)
+
+	if username != "" {
+		tx = tx.Where("username = ?", username)
+	}
+	if startTimestamp != 0 {
+		tx = tx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp != 0 {
+		tx = tx.Where("created_at <= ?", endTimestamp)
+	}
+
+	err := tx.Group("model_name").
+		Order("quota DESC").
+		Find(&result).Error
+
+	return result, err
 }
 
 func DeleteOldLog(ctx context.Context, targetTimestamp int64, limit int) (int64, error) {
