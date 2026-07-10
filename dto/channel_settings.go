@@ -9,6 +9,9 @@ type ChannelSettings struct {
 	SystemPromptOverride   bool   `json:"system_prompt_override,omitempty"`
 	DisableProbe           bool   `json:"disable_probe,omitempty"` // 跳过批量探测/可用性测试
 	Support4K              bool   `json:"support_4k,omitempty"`    // 是否支持4K图片生成
+	// ResponsesToChatEnabled 命中后将 /v1/responses 请求降级转换为 /v1/chat/completions 发给上游，
+	// 用于上游只支持 chat/completions、不支持 responses 端点的场景。
+	ResponsesToChatEnabled bool `json:"responses_to_chat_enabled,omitempty"`
 }
 
 type VertexKeyType string

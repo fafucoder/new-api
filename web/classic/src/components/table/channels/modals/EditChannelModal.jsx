@@ -197,6 +197,7 @@ const EditChannelModal = (props) => {
     system_prompt_override: false,
     disable_probe: false,
     support_4k: false,
+    responses_to_chat_enabled: false,
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -521,6 +522,7 @@ const EditChannelModal = (props) => {
     system_prompt: '',
     disable_probe: false,
     support_4k: false,
+    responses_to_chat_enabled: false,
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -876,6 +878,8 @@ const EditChannelModal = (props) => {
             parsedSettings.system_prompt_override || false;
           data.disable_probe = parsedSettings.disable_probe || false;
           data.support_4k = parsedSettings.support_4k || false;
+          data.responses_to_chat_enabled =
+            parsedSettings.responses_to_chat_enabled || false;
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -886,6 +890,7 @@ const EditChannelModal = (props) => {
           data.system_prompt_override = false;
           data.disable_probe = false;
           data.support_4k = false;
+          data.responses_to_chat_enabled = false;
         }
       } else {
         data.force_format = false;
@@ -896,6 +901,7 @@ const EditChannelModal = (props) => {
         data.system_prompt_override = false;
         data.disable_probe = false;
         data.support_4k = false;
+        data.responses_to_chat_enabled = false;
       }
 
       if (data.settings) {
@@ -1006,6 +1012,7 @@ const EditChannelModal = (props) => {
         system_prompt: data.system_prompt,
         system_prompt_override: data.system_prompt_override || false,
         disable_probe: data.disable_probe || false,
+        responses_to_chat_enabled: data.responses_to_chat_enabled || false,
       });
       initialModelsRef.current = (data.models || [])
         .map((model) => (model || '').trim())
@@ -1049,6 +1056,7 @@ const EditChannelModal = (props) => {
         data.force_format ||
         data.claude_beta_query ||
         data.disable_probe ||
+        data.responses_to_chat_enabled ||
         data.system_prompt_override;
       if (hasAdvancedValues) {
         setAdvancedSettingsOpen(true);
@@ -1398,6 +1406,7 @@ const EditChannelModal = (props) => {
       system_prompt_override: false,
       disable_probe: false,
       support_4k: false,
+      responses_to_chat_enabled: false,
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1770,6 +1779,7 @@ const EditChannelModal = (props) => {
       system_prompt_override: localInputs.system_prompt_override || false,
       disable_probe: localInputs.disable_probe || false,
       support_4k: localInputs.support_4k || false,
+      responses_to_chat_enabled: localInputs.responses_to_chat_enabled || false,
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -1853,6 +1863,7 @@ const EditChannelModal = (props) => {
     delete localInputs.system_prompt_override;
     delete localInputs.disable_probe;
     delete localInputs.support_4k;
+    delete localInputs.responses_to_chat_enabled;
     delete localInputs.is_enterprise_account;
     // 顶层的 vertex_key_type 不应发送给后端
     delete localInputs.vertex_key_type;
@@ -2548,6 +2559,10 @@ const EditChannelModal = (props) => {
 
                   {inputs.type === 1 && (
                     <Form.Switch field='force_format' label={t('强制格式化')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('force_format', value)} extraText={t('强制将响应格式化为 OpenAI 标准格式（只适用于OpenAI渠道类型）')} />
+                  )}
+
+                  {(inputs.type === 1 || inputs.type === 14) && (
+                    <Form.Switch field='responses_to_chat_enabled' label={t('Responses 降级转换')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('responses_to_chat_enabled', value)} extraText={t('开启后，客户端的 /v1/responses 请求将降级转换后发给上游：OpenAI 渠道转为 /v1/chat/completions，Anthropic 渠道转为 /v1/messages（Claude 协议）。用于上游不支持 responses 端点的场景')} />
                   )}
 
                   <Form.Switch field='thinking_to_content' label={t('思考内容转换')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('thinking_to_content', value)} extraText={t('将 reasoning_content 转换为 <think> 标签拼接到内容中')} />

@@ -70,6 +70,37 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		return types.NewError(fmt.Errorf("invalid api type: %d", info.ApiType), types.ErrorCodeInvalidApiType, types.ErrOptionWithSkipRetry())
 	}
 	adaptor.Init(info)
+
+	// 若渠道开启 responses->chat 降级：
+	//   - OpenAI 兼容上游：降级为 /v1/chat/completions
+	//   - Anthropic 上游：降级为 /v1/messages（Claude 协议）
+	// 再把上游响应转回 responses 格式返回客户端。
+	if info.RelayMode != relayconstant.RelayModeResponsesCompact &&
+		info.ChannelSetting.ResponsesToChatEnabled {
+		var usage *dto.Usage
+		var apiErr *types.NewAPIError
+		handled := true
+		switch info.ApiType {
+		case appconstant.APITypeOpenAI:
+			usage, apiErr = responsesViaChatCompletions(c, info, adaptor, request)
+		case appconstant.APITypeAnthropic:
+			usage, apiErr = responsesViaClaudeMessages(c, info, adaptor, request)
+		default:
+			handled = false
+		}
+		if handled {
+			if apiErr != nil {
+				return apiErr
+			}
+			if strings.HasPrefix(info.OriginModelName, "gpt-4o-audio") {
+				service.PostAudioConsumeQuota(c, info, usage, "")
+			} else {
+				service.PostTextConsumeQuota(c, info, usage, nil)
+			}
+			return nil
+		}
+	}
+
 	var requestBody io.Reader
 	if model_setting.GetGlobalSettings().PassThroughRequestEnabled || info.ChannelSetting.PassThroughBodyEnabled {
 		storage, err := common.GetBodyStorage(c)
