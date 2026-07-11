@@ -14,6 +14,16 @@ import (
 	"github.com/samber/lo"
 )
 
+// clientFacingModel returns the model name to expose to the client for a converted response.
+// If the channel enables model-name unification it returns the requested model name; otherwise it
+// falls back to the upstream-provided name.
+func clientFacingModel(info *relaycommon.RelayInfo, upstreamModel string) string {
+	if m := info.GetClientFacingModelName(); m != "" {
+		return m
+	}
+	return upstreamModel
+}
+
 func ClaudeToOpenAIRequest(claudeRequest dto.ClaudeRequest, info *relaycommon.RelayInfo) (*dto.GeneralOpenAIRequest, error) {
 	openAIRequest := dto.GeneralOpenAIRequest{
 		Model:       claudeRequest.Model,
@@ -299,7 +309,7 @@ func StreamResponseOpenAI2Claude(openAIResponse *dto.ChatCompletionsStreamRespon
 	if info.SendResponseCount == 1 {
 		msg := &dto.ClaudeMediaMessage{
 			Id:    openAIResponse.Id,
-			Model: openAIResponse.Model,
+			Model: clientFacingModel(info, openAIResponse.Model),
 			Type:  "message",
 			Role:  "assistant",
 			Usage: &dto.ClaudeUsage{
@@ -611,7 +621,7 @@ func ResponseOpenAI2Claude(openAIResponse *dto.OpenAITextResponse, info *relayco
 		Id:    openAIResponse.Id,
 		Type:  "message",
 		Role:  "assistant",
-		Model: openAIResponse.Model,
+		Model: clientFacingModel(info, openAIResponse.Model),
 	}
 	for _, choice := range openAIResponse.Choices {
 		stopReason = stopReasonOpenAI2Claude(choice.FinishReason)

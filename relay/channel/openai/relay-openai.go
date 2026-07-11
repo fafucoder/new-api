@@ -27,13 +27,19 @@ func sendStreamData(c *gin.Context, info *relaycommon.RelayInfo, data string, fo
 		return nil
 	}
 
-	if !forceFormat && !thinkToContent {
+	unifyModel := info.GetClientFacingModelName()
+
+	if !forceFormat && !thinkToContent && unifyModel == "" {
 		return helper.StringData(c, data)
 	}
 
 	var lastStreamResponse dto.ChatCompletionsStreamResponse
 	if err := common.UnmarshalJsonStr(data, &lastStreamResponse); err != nil {
 		return err
+	}
+
+	if unifyModel != "" {
+		lastStreamResponse.Model = unifyModel
 	}
 
 	if !thinkToContent {
@@ -240,6 +246,12 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		forceFormat = true
 	}
 
+	// 统一响应模型名：若渠道开启，则把响应体 model 改写为用户请求的模型名
+	unifyModel := info.GetClientFacingModelName()
+	if unifyModel != "" {
+		simpleResponse.Model = unifyModel
+	}
+
 	usageModified := false
 	if simpleResponse.Usage.PromptTokens == 0 {
 		completionTokens := simpleResponse.Usage.CompletionTokens
@@ -261,13 +273,18 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 
 	switch info.RelayFormat {
 	case types.RelayFormatOpenAI:
-		if usageModified {
+		if usageModified || unifyModel != "" {
 			var bodyMap map[string]interface{}
 			err = common.Unmarshal(responseBody, &bodyMap)
 			if err != nil {
 				return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 			}
-			bodyMap["usage"] = simpleResponse.Usage
+			if usageModified {
+				bodyMap["usage"] = simpleResponse.Usage
+			}
+			if unifyModel != "" {
+				bodyMap["model"] = unifyModel
+			}
 			responseBody, _ = common.Marshal(bodyMap)
 		}
 		if forceFormat {

@@ -40,6 +40,17 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 		c.Set("image_generation_call_size", responsesResponse.GetSize())
 	}
 
+	// 统一响应模型名：若渠道开启，则把响应体 model 改写为用户请求的模型名
+	if m := info.GetClientFacingModelName(); m != "" {
+		var bodyMap map[string]interface{}
+		if err := common.Unmarshal(responseBody, &bodyMap); err == nil {
+			bodyMap["model"] = m
+			if newBody, mErr := common.Marshal(bodyMap); mErr == nil {
+				responseBody = newBody
+			}
+		}
+	}
+
 	// 写入新的 response body
 	service.IOCopyBytesGracefully(c, resp, responseBody)
 
@@ -87,6 +98,13 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			logger.LogError(c, "failed to unmarshal stream response: "+err.Error())
 			sr.Error(err)
 			return
+		}
+		// 统一响应模型名：若渠道开启，改写事件里 response.model 后重新序列化
+		if m := info.GetClientFacingModelName(); m != "" && streamResponse.Response != nil && streamResponse.Response.Model != "" {
+			streamResponse.Response.Model = m
+			if newData, mErr := common.Marshal(streamResponse); mErr == nil {
+				data = string(newData)
+			}
 		}
 		sendResponsesStreamData(c, streamResponse, data)
 		switch streamResponse.Type {

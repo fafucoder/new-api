@@ -647,6 +647,16 @@ func (info *RelayInfo) GetEstimatePromptTokens() int {
 	return info.estimatePromptTokens
 }
 
+// GetClientFacingModelName 返回应回写到响应体 model 字段的模型名。
+// 当渠道开启 UnifyModelName 时返回用户请求的原始模型名（OriginModelName），
+// 否则返回空串，表示不改写、保持上游返回的原值。
+func (info *RelayInfo) GetClientFacingModelName() string {
+	if info != nil && info.ChannelMeta != nil && info.ChannelSetting.UnifyModelName && info.OriginModelName != "" {
+		return info.OriginModelName
+	}
+	return ""
+}
+
 func (info *RelayInfo) SetFirstResponseTime() {
 	if info.isFirstResponse {
 		info.FirstResponseTime = time.Now()

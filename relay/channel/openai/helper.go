@@ -179,7 +179,11 @@ func handleLastResponse(lastStreamData string, responseId *string, createAt *int
 	*responseId = lastStreamResponse.Id
 	*createAt = lastStreamResponse.Created
 	*systemFingerprint = lastStreamResponse.GetSystemFingerprint()
-	*model = lastStreamResponse.Model
+	if m := info.GetClientFacingModelName(); m != "" {
+		*model = m
+	} else {
+		*model = lastStreamResponse.Model
+	}
 
 	if service.ValidUsage(lastStreamResponse.Usage) {
 		*containStreamUsage = true

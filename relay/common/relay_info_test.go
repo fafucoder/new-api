@@ -38,3 +38,27 @@ func TestRelayInfoGetFinalRequestRelayFormatNilReceiver(t *testing.T) {
 	var info *RelayInfo
 	require.Equal(t, types.RelayFormat(""), info.GetFinalRequestRelayFormat())
 }
+
+func TestGetClientFacingModelName(t *testing.T) {
+	// 开关关闭：返回空串（不改写）
+	off := &RelayInfo{OriginModelName: "GLM5.2", ChannelMeta: &ChannelMeta{}}
+	require.Equal(t, "", off.GetClientFacingModelName())
+
+	// 开关开启：返回请求的原始模型名
+	on := &RelayInfo{OriginModelName: "GLM5.2", ChannelMeta: &ChannelMeta{}}
+	on.ChannelSetting.UnifyModelName = true
+	require.Equal(t, "GLM5.2", on.GetClientFacingModelName())
+
+	// 开关开启但 OriginModelName 为空：返回空串
+	empty := &RelayInfo{ChannelMeta: &ChannelMeta{}}
+	empty.ChannelSetting.UnifyModelName = true
+	require.Equal(t, "", empty.GetClientFacingModelName())
+
+	// ChannelMeta 为 nil 时安全（不 panic）
+	noMeta := &RelayInfo{OriginModelName: "GLM5.2"}
+	require.Equal(t, "", noMeta.GetClientFacingModelName())
+
+	// nil receiver 安全
+	var nilInfo *RelayInfo
+	require.Equal(t, "", nilInfo.GetClientFacingModelName())
+}

@@ -26,6 +26,7 @@ type ChatToResponsesEmitter struct {
 	respID    string
 	createdAt int64
 	model     string
+	lockModel bool // when true, the initial model is authoritative and chunk models are ignored
 
 	usage      *dto.Usage
 	outputText strings.Builder
@@ -50,12 +51,19 @@ type ChatToResponsesEmitter struct {
 // NewChatToResponsesEmitter creates an emitter. respID/createdAt/model provide the initial
 // Responses envelope values; they may be updated from incoming chunks.
 func NewChatToResponsesEmitter(c *gin.Context, info *relaycommon.RelayInfo, respID string, createdAt int64, model string) *ChatToResponsesEmitter {
+	lockModel := false
+	if unified := info.GetClientFacingModelName(); unified != "" {
+		// 渠道开启统一模型名：锁定为请求名，忽略上游 chunk 里的 model
+		model = unified
+		lockModel = true
+	}
 	return &ChatToResponsesEmitter{
 		c:          c,
 		info:       info,
 		respID:     respID,
 		createdAt:  createdAt,
 		model:      model,
+		lockModel:  lockModel,
 		usage:      &dto.Usage{},
 		toolStates: make(map[int]*chatToResponsesToolCallState),
 	}
@@ -236,7 +244,7 @@ func (e *ChatToResponsesEmitter) ProcessChatChunk(chatChunk *dto.ChatCompletions
 	if chatChunk == nil {
 		return e.streamErr == nil
 	}
-	if chatChunk.Model != "" {
+	if chatChunk.Model != "" && !e.lockModel {
 		e.model = chatChunk.Model
 	}
 	if chatChunk.Created != 0 {

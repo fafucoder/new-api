@@ -12,6 +12,9 @@ type ChannelSettings struct {
 	// ResponsesToChatEnabled 命中后将 /v1/responses 请求降级转换为 /v1/chat/completions 发给上游，
 	// 用于上游只支持 chat/completions、不支持 responses 端点的场景。
 	ResponsesToChatEnabled bool `json:"responses_to_chat_enabled,omitempty"`
+	// UnifyModelName 开启后，返回给客户端的响应体 model 字段统一改写为用户请求的模型名（OriginModelName），
+	// 用于上游返回的模型名与请求名不一致/不稳定的场景。
+	UnifyModelName bool `json:"unify_model_name,omitempty"`
 }
 
 type VertexKeyType string

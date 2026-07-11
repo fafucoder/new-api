@@ -65,6 +65,9 @@ func ClaudeToResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp 
 	}
 
 	openaiResp := ResponseClaude2OpenAI(&claudeResp)
+	if m := info.GetClientFacingModelName(); m != "" {
+		openaiResp.Model = m
+	}
 	usage := &dto.Usage{}
 	claudeUsageToOpenAIUsage(claudeResp.Usage, usage)
 	openaiResp.Usage = *usage

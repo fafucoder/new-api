@@ -55,6 +55,10 @@ func OaiChatToResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
 
+	if m := info.GetClientFacingModelName(); m != "" {
+		chatResp.Model = m
+	}
+
 	respID := responsesID(c)
 	responsesResp, err := service.ChatCompletionsResponseToResponsesResponse(&chatResp, respID)
 	if err != nil {
