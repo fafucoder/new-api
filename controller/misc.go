@@ -100,6 +100,9 @@ func GetStatus(c *gin.Context) {
 		"faq_enabled":             cs.FAQEnabled,
 		"cache_hit_stats_enabled": cs.CacheHitStatsEnabled,
 
+		// 普通用户日志是否展示「实际模型」(上游真实模型名)
+		"log_display_upstream_model_enabled": cs.LogDisplayUpstreamModelEnabled,
+
 		// 模块管理配置
 		"HeaderNavModules":    common.OptionMap["HeaderNavModules"],
 		"SidebarModulesAdmin": common.OptionMap["SidebarModulesAdmin"],

@@ -1249,6 +1249,8 @@
     "启用请求透传": "Enable request pass-through",
     "启用违规扣费": "Enable violation deduction",
     "启用额度消费日志记录": "Enable quota consumption logging",
+    "普通用户日志展示实际模型": "Show actual model in logs for regular users",
+    "关闭后，普通用户在使用日志中将看不到「实际模型」(上游真实模型名)，管理员不受影响": "When disabled, regular users will not see the \"Actual Model\" (upstream real model name) in usage logs; administrators are not affected",
     "启用验证": "Enable Authentication",
     "告警中": "Alerting",
     "告警阈值": "Alert threshold",

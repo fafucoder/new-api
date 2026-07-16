@@ -46,6 +46,7 @@ export default function SettingsLog(props) {
   const [loadingCleanHistoryLog, setLoadingCleanHistoryLog] = useState(false);
   const [inputs, setInputs] = useState({
     LogConsumeEnabled: false,
+    'console_setting.log_display_upstream_model_enabled': true,
     historyTimestamp: dayjs().subtract(1, 'month').toDate(),
   });
   const refForm = useRef();
@@ -183,7 +184,13 @@ export default function SettingsLog(props) {
     const currentInputs = {};
     for (let key in props.options) {
       if (Object.keys(inputs).includes(key)) {
-        currentInputs[key] = props.options[key];
+        // 布尔类型的设置项需从字符串强制转换（后端 option 存的是字符串）
+        if (typeof inputs[key] === 'boolean') {
+          currentInputs[key] =
+            props.options[key] === true || props.options[key] === 'true';
+        } else {
+          currentInputs[key] = props.options[key];
+        }
       }
     }
     currentInputs['historyTimestamp'] = inputs.historyTimestamp;
@@ -212,6 +219,25 @@ export default function SettingsLog(props) {
                     setInputs({
                       ...inputs,
                       LogConsumeEnabled: value,
+                    });
+                  }}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'console_setting.log_display_upstream_model_enabled'}
+                  label={t('普通用户日志展示实际模型')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  extraText={t(
+                    '关闭后，普通用户在使用日志中将看不到「实际模型」(上游真实模型名)，管理员不受影响',
+                  )}
+                  onChange={(value) => {
+                    setInputs({
+                      ...inputs,
+                      'console_setting.log_display_upstream_model_enabled':
+                        value,
                     });
                   }}
                 />

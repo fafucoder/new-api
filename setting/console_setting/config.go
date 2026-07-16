@@ -12,6 +12,9 @@ type ConsoleSetting struct {
 	AnnouncementsEnabled bool   `json:"announcements_enabled"`   // 是否启用系统公告面板
 	FAQEnabled           bool   `json:"faq_enabled"`             // 是否启用常见问答面板
 	CacheHitStatsEnabled bool   `json:"cache_hit_stats_enabled"` // 是否启用缓存命中率统计页面
+	// LogDisplayUpstreamModelEnabled 控制普通用户使用日志是否展示「实际模型」(上游真实模型名)。
+	// 默认 true（保持现状）；管理员始终可见，不受此开关影响。
+	LogDisplayUpstreamModelEnabled bool `json:"log_display_upstream_model_enabled"`
 }
 
 // 默认配置
@@ -24,6 +27,8 @@ var defaultConsoleSetting = ConsoleSetting{
 	UptimeKumaEnabled:    true,
 	AnnouncementsEnabled: true,
 	FAQEnabled:           true,
+	// 默认展示，保持升级前的现状；老部署 DB 无此键时也会沿用该默认值。
+	LogDisplayUpstreamModelEnabled: true,
 }
 
 // 全局实例

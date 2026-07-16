@@ -8,6 +8,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/setting/console_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -51,6 +52,7 @@ const (
 )
 
 func formatUserLogs(logs []*Log, startIdx int) {
+	showUpstreamModel := console_setting.GetConsoleSetting().LogDisplayUpstreamModelEnabled
 	for i := range logs {
 		logs[i].ChannelName = ""
 		var otherMap map[string]interface{}
@@ -60,6 +62,11 @@ func formatUserLogs(logs []*Log, startIdx int) {
 			delete(otherMap, "admin_info")
 			// delete(otherMap, "reject_reason")
 			delete(otherMap, "stream_status")
+			// 普通用户是否可见「实际模型」(上游真实模型名)，由全局开关控制
+			if !showUpstreamModel {
+				delete(otherMap, "upstream_model_name")
+				delete(otherMap, "is_model_mapped")
+			}
 		}
 		logs[i].Other = common.MapToJsonStr(otherMap)
 		logs[i].Id = startIdx + i + 1
