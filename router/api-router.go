@@ -249,6 +249,8 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			imageSizeRoute.GET("/image-size", controller.GetImageSizeSetting)
 			imageSizeRoute.PUT("/image-size", controller.UpdateImageSizeSetting)
+			imageSizeRoute.GET("/image-size-validation", controller.GetImageSizeValidationSetting)
+			imageSizeRoute.PUT("/image-size-validation", controller.UpdateImageSizeValidationSetting)
 		}
 
 		// Custom OAuth provider management (root only)

@@ -591,6 +591,11 @@ func handleConfigUpdate(key, value string) bool {
 		if setting, ok := cfg.(*image_size_setting.ImageSizeSetting); ok {
 			image_size_setting.UpdateSetting(*setting)
 		}
+	} else if configName == "image_size_validation" {
+		// 同 image_size_setting，反射修改绕过 mutex，需显式同步
+		if setting, ok := cfg.(*image_size_setting.ImageSizeValidationSetting); ok {
+			image_size_setting.UpdateValidationSetting(*setting)
+		}
 	}
 
 	return true // 已处理

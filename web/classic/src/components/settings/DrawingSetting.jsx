@@ -21,6 +21,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Spin } from '@douyinfe/semi-ui';
 import SettingsDrawing from '../../pages/Setting/Drawing/SettingsDrawing';
 import ImageSizeSetting from './ImageSizeSetting';
+import ImageSizeValidationSetting from './ImageSizeValidationSetting';
 import { API, showError, toBoolean } from '../../helpers';
 
 const DrawingSetting = () => {
@@ -79,6 +80,8 @@ const DrawingSetting = () => {
         </Card>
         {/* 图片尺寸设置 */}
         <ImageSizeSetting />
+        {/* 图片尺寸硬性校验 */}
+        <ImageSizeValidationSetting />
       </Spin>
     </>
   );
