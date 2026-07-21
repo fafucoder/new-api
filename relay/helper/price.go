@@ -69,6 +69,12 @@ func ModelPriceHelper(c *gin.Context, info *relaycommon.RelayInfo, promptTokens 
 
 	groupRatioInfo := HandleGroupRatio(c, info)
 
+	// 分组特殊模型定价：若为当前使用分组配置了该模型的绝对价格，则覆盖模型价格并按价格计费
+	if specialPrice, ok := ratio_setting.GetGroupModelPrice(info.UsingGroup, info.OriginModelName); ok {
+		modelPrice = specialPrice
+		usePrice = true
+	}
+
 	// Check if this model uses tiered_expr billing
 	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeTieredExpr {
 		return modelPriceHelperTiered(c, info, promptTokens, meta, groupRatioInfo)
@@ -169,6 +175,13 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 
 	modelPrice, success := ratio_setting.GetModelPrice(info.OriginModelName, true)
 	usePrice := success
+
+	// 分组特殊模型定价：命中则直接使用该绝对价格
+	if specialPrice, ok := ratio_setting.GetGroupModelPrice(info.UsingGroup, info.OriginModelName); ok {
+		modelPrice = specialPrice
+		success = true
+		usePrice = true
+	}
 	var modelRatio float64
 
 	if !success {

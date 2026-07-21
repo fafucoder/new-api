@@ -1,5 +1,8 @@
 {
   "translation": {
+    "分组特殊模型定价": "分組特殊模型定價",
+    "为某个分组下的特定模型设置固定价格（按次/按量的绝对价格），命中后作为模型价格并仍会乘以分组倍率。例如：codex 分组的 gpt-image-2 价格为 0.06，gpt-image-2 分组的 gpt-image-2 价格为 1.5": "為某個分組下的特定模型設定固定價格（按次/按量的絕對價格），命中後作為模型價格並仍會乘以分組倍率。例如：codex 分組的 gpt-image-2 價格為 0.06，gpt-image-2 分組的 gpt-image-2 價格為 1.5",
+    "键为分组名称，值为另一个 JSON 对象，键为模型名称，值为该模型在该分组下的固定价格（绝对价格），命中后作为模型价格并仍会乘以分组倍率。例如：{\"codex\": {\"gpt-image-2\": 0.06}, \"gpt-image-2\": {\"gpt-image-2\": 1.5}}，表示 gpt-image-2 模型在 codex 分组价格为 0.06，在 gpt-image-2 分组价格为 1.5": "鍵為分組名稱，值為另一個 JSON 物件，鍵為模型名稱，值為該模型在該分組下的固定價格（絕對價格），命中後作為模型價格並仍會乘以分組倍率。例如：{\"codex\": {\"gpt-image-2\": 0.06}, \"gpt-image-2\": {\"gpt-image-2\": 1.5}}，表示 gpt-image-2 模型在 codex 分組價格為 0.06，在 gpt-image-2 分組價格為 1.5",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Web搜尋 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}": " + 圖片生成調用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}",
     " + 文件搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + 檔案搜尋 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",

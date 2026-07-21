@@ -1,5 +1,8 @@
 {
   "translation": {
+    "分组特殊模型定价": "Giá mô hình đặc biệt theo nhóm",
+    "为某个分组下的特定模型设置固定价格（按次/按量的绝对价格），命中后作为模型价格并仍会乘以分组倍率。例如：codex 分组的 gpt-image-2 价格为 0.06，gpt-image-2 分组的 gpt-image-2 价格为 1.5": "Đặt giá cố định (giá tuyệt đối theo lần gọi/theo lượng dùng) cho một mô hình cụ thể trong một nhóm. Khi khớp, giá này được dùng làm giá mô hình và vẫn được nhân với hệ số nhóm. Ví dụ: gpt-image-2 có giá 0,06 ở nhóm codex và 1,5 ở nhóm gpt-image-2",
+    "键为分组名称，值为另一个 JSON 对象，键为模型名称，值为该模型在该分组下的固定价格（绝对价格），命中后作为模型价格并仍会乘以分组倍率。例如：{\"codex\": {\"gpt-image-2\": 0.06}, \"gpt-image-2\": {\"gpt-image-2\": 1.5}}，表示 gpt-image-2 模型在 codex 分组价格为 0.06，在 gpt-image-2 分组价格为 1.5": "Khóa là tên nhóm, giá trị là một đối tượng JSON khác với khóa là tên mô hình và giá trị là giá cố định (giá tuyệt đối) của mô hình đó trong nhóm. Khi khớp, giá này được dùng làm giá mô hình và vẫn được nhân với hệ số nhóm. Ví dụ: {\"codex\": {\"gpt-image-2\": 0.06}, \"gpt-image-2\": {\"gpt-image-2\": 1.5}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Tìm kiếm Web {{count}} lần / 1K lần * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Tìm kiếm Web {{count}} lần / 1K lần * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}": " + Gọi tạo hình ảnh {{symbol}}{{price}} / 1 lần * {{ratioType}} {{ratio}}",

@@ -1,5 +1,8 @@
 {
   "translation": {
+    "分组特殊模型定价": "Tarif de modèle spécial par groupe",
+    "为某个分组下的特定模型设置固定价格（按次/按量的绝对价格），命中后作为模型价格并仍会乘以分组倍率。例如：codex 分组的 gpt-image-2 价格为 0.06，gpt-image-2 分组的 gpt-image-2 价格为 1.5": "Définir un prix fixe (prix absolu par appel/par usage) pour un modèle spécifique dans un groupe. En cas de correspondance, il est utilisé comme prix du modèle et est toujours multiplié par le ratio du groupe. Ex. : gpt-image-2 coûte 0,06 dans le groupe codex et 1,5 dans le groupe gpt-image-2",
+    "键为分组名称，值为另一个 JSON 对象，键为模型名称，值为该模型在该分组下的固定价格（绝对价格），命中后作为模型价格并仍会乘以分组倍率。例如：{\"codex\": {\"gpt-image-2\": 0.06}, \"gpt-image-2\": {\"gpt-image-2\": 1.5}}，表示 gpt-image-2 模型在 codex 分组价格为 0.06，在 gpt-image-2 分组价格为 1.5": "La clé est le nom du groupe, la valeur est un autre objet JSON dont la clé est le nom du modèle et la valeur le prix fixe (prix absolu) de ce modèle dans ce groupe. En cas de correspondance, il est utilisé comme prix du modèle et est toujours multiplié par le ratio du groupe. Ex. : {\"codex\": {\"gpt-image-2\": 0.06}, \"gpt-image-2\": {\"gpt-image-2\": 1.5}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_many": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Recherche Web {{count}} fois / 1K fois * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",

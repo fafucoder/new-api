@@ -47,6 +47,7 @@ import GroupTable from './components/GroupTable';
 import AutoGroupList from './components/AutoGroupList';
 import GroupGroupRatioRules from './components/GroupGroupRatioRules';
 import GroupSpecialUsableRules from './components/GroupSpecialUsableRules';
+import GroupModelPriceRules from './components/GroupModelPriceRules';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -54,6 +55,7 @@ const OPTION_KEYS = [
   'GroupRatio',
   'UserUsableGroups',
   'GroupGroupRatio',
+  'GroupModelPrice',
   'group_ratio_setting.group_special_usable_group',
   'AutoGroups',
   'DefaultUseAutoGroup',
@@ -78,6 +80,7 @@ export default function GroupRatioSettings(props) {
     GroupRatio: '',
     UserUsableGroups: '',
     GroupGroupRatio: '',
+    GroupModelPrice: '',
     'group_ratio_setting.group_special_usable_group': '',
     AutoGroups: '',
     DefaultUseAutoGroup: false,
@@ -140,7 +143,16 @@ export default function GroupRatioSettings(props) {
   }
 
   useEffect(() => {
-    const currentInputs = {};
+    const defaults = {
+      GroupRatio: '',
+      UserUsableGroups: '',
+      GroupGroupRatio: '',
+      GroupModelPrice: '',
+      'group_ratio_setting.group_special_usable_group': '',
+      AutoGroups: '',
+      DefaultUseAutoGroup: false,
+    };
+    const currentInputs = { ...defaults };
     for (let key in props.options) {
       if (OPTION_KEYS.includes(key)) {
         currentInputs[key] = props.options[key];
@@ -174,6 +186,10 @@ export default function GroupRatioSettings(props) {
       ...prev,
       'group_ratio_setting.group_special_usable_group': value,
     }));
+  }, []);
+
+  const handleGroupModelPriceChange = useCallback((value) => {
+    setInputs((prev) => ({ ...prev, GroupModelPrice: value }));
   }, []);
 
   const dv = dataVersionRef.current;
@@ -236,6 +252,18 @@ export default function GroupRatioSettings(props) {
           value={inputs.GroupGroupRatio}
           groupNames={groupNames}
           onChange={handleGroupGroupRatioChange}
+        />
+      </Form.Section>
+
+      <Form.Section text={t('分组特殊模型定价')}>
+        <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 12 }}>
+          {t('为某个分组下的特定模型设置固定价格（按次/按量的绝对价格），命中后作为模型价格并仍会乘以分组倍率。例如：codex 分组的 gpt-image-2 价格为 0.06，gpt-image-2 分组的 gpt-image-2 价格为 1.5')}
+        </Text>
+        <GroupModelPriceRules
+          key={`gmp_${dv}`}
+          value={inputs.GroupModelPrice}
+          groupNames={groupNames}
+          onChange={handleGroupModelPriceChange}
         />
       </Form.Section>
 
@@ -337,6 +365,30 @@ export default function GroupRatioSettings(props) {
               ]}
               onChange={(value) =>
                 setInputs((prev) => ({ ...prev, GroupGroupRatio: value }))
+              }
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} sm={16}>
+            <Form.TextArea
+              label={t('分组特殊模型定价')}
+              placeholder={t('为一个 JSON 文本')}
+              extraText={t(
+                '键为分组名称，值为另一个 JSON 对象，键为模型名称，值为该模型在该分组下的固定价格（绝对价格），命中后作为模型价格并仍会乘以分组倍率。例如：{"codex": {"gpt-image-2": 0.06}, "gpt-image-2": {"gpt-image-2": 1.5}}，表示 gpt-image-2 模型在 codex 分组价格为 0.06，在 gpt-image-2 分组价格为 1.5',
+              )}
+              field={'GroupModelPrice'}
+              autosize={{ minRows: 6, maxRows: 12 }}
+              trigger='blur'
+              stopValidateWithError
+              rules={[
+                {
+                  validator: (rule, value) => verifyJSON(value),
+                  message: t('不是合法的 JSON 字符串'),
+                },
+              ]}
+              onChange={(value) =>
+                setInputs((prev) => ({ ...prev, GroupModelPrice: value }))
               }
             />
           </Col>

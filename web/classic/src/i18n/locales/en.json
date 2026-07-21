@@ -1,5 +1,8 @@
 {
   "translation": {
+    "分组特殊模型定价": "Group special model price",
+    "为某个分组下的特定模型设置固定价格（按次/按量的绝对价格），命中后作为模型价格并仍会乘以分组倍率。例如：codex 分组的 gpt-image-2 价格为 0.06，gpt-image-2 分组的 gpt-image-2 价格为 1.5": "Set a fixed price (absolute per-call/per-usage price) for a specific model under a group. When matched, it is used as the model price and is still multiplied by the group ratio. E.g. gpt-image-2 costs 0.06 in the codex group and 1.5 in the gpt-image-2 group",
+    "键为分组名称，值为另一个 JSON 对象，键为模型名称，值为该模型在该分组下的固定价格（绝对价格），命中后作为模型价格并仍会乘以分组倍率。例如：{\"codex\": {\"gpt-image-2\": 0.06}, \"gpt-image-2\": {\"gpt-image-2\": 1.5}}，表示 gpt-image-2 模型在 codex 分组价格为 0.06，在 gpt-image-2 分组价格为 1.5": "The key is the group name, the value is another JSON object whose key is the model name and value is the fixed price (absolute price) of that model in that group. When matched, it is used as the model price and is still multiplied by the group ratio. E.g. {\"codex\": {\"gpt-image-2\": 0.06}, \"gpt-image-2\": {\"gpt-image-2\": 1.5}} means gpt-image-2 costs 0.06 in the codex group and 1.5 in the gpt-image-2 group",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_one": " + Web search {{count}} time / 1K times * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + Web搜索 {{count}}次 / 1K 次 * {{symbol}}{{price}} * {{ratioType}} {{ratio}}_other": " + Web search {{count}} times / 1K times * {{symbol}}{{price}} * {{ratioType}} {{ratio}}",
     " + 图片生成调用 {{symbol}}{{price}} / 1次 * {{ratioType}} {{ratio}}": " + Image generation call {{symbol}}{{price}} / 1 time * {{ratioType}} {{ratio}}",
