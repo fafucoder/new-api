@@ -48,6 +48,7 @@ import AutoGroupList from './components/AutoGroupList';
 import GroupGroupRatioRules from './components/GroupGroupRatioRules';
 import GroupSpecialUsableRules from './components/GroupSpecialUsableRules';
 import GroupModelPriceRules from './components/GroupModelPriceRules';
+import GroupModelImageOnlyRules from './components/GroupModelImageOnlyRules';
 
 const { Text, Title, Paragraph } = Typography;
 
@@ -56,6 +57,7 @@ const OPTION_KEYS = [
   'UserUsableGroups',
   'GroupGroupRatio',
   'GroupModelPrice',
+  'GroupModelImageOnly',
   'group_ratio_setting.group_special_usable_group',
   'AutoGroups',
   'DefaultUseAutoGroup',
@@ -81,6 +83,7 @@ export default function GroupRatioSettings(props) {
     UserUsableGroups: '',
     GroupGroupRatio: '',
     GroupModelPrice: '',
+    GroupModelImageOnly: '',
     'group_ratio_setting.group_special_usable_group': '',
     AutoGroups: '',
     DefaultUseAutoGroup: false,
@@ -148,6 +151,7 @@ export default function GroupRatioSettings(props) {
       UserUsableGroups: '',
       GroupGroupRatio: '',
       GroupModelPrice: '',
+      GroupModelImageOnly: '',
       'group_ratio_setting.group_special_usable_group': '',
       AutoGroups: '',
       DefaultUseAutoGroup: false,
@@ -190,6 +194,10 @@ export default function GroupRatioSettings(props) {
 
   const handleGroupModelPriceChange = useCallback((value) => {
     setInputs((prev) => ({ ...prev, GroupModelPrice: value }));
+  }, []);
+
+  const handleGroupModelImageOnlyChange = useCallback((value) => {
+    setInputs((prev) => ({ ...prev, GroupModelImageOnly: value }));
   }, []);
 
   const dv = dataVersionRef.current;
@@ -264,6 +272,18 @@ export default function GroupRatioSettings(props) {
           value={inputs.GroupModelPrice}
           groupNames={groupNames}
           onChange={handleGroupModelPriceChange}
+        />
+      </Form.Section>
+
+      <Form.Section text={t('分组生图模型限制')}>
+        <Text type='tertiary' size='small' style={{ display: 'block', marginBottom: 12 }}>
+          {t('将某个分组下的特定模型标记为生图模型（白名单）。开启后，该模型仅允许通过 /v1/images/generations 与 /v1/images/edits 接口调用，经由 chat/responses 等其他接口调用时会返回接口路径错误。适用于按次计费的生图模型，避免被错误地按 chat 接口调用。例如：gpt-image-2 分组的 gpt-image-2 标记为生图')}
+        </Text>
+        <GroupModelImageOnlyRules
+          key={`gmio_${dv}`}
+          value={inputs.GroupModelImageOnly}
+          groupNames={groupNames}
+          onChange={handleGroupModelImageOnlyChange}
         />
       </Form.Section>
 
@@ -389,6 +409,30 @@ export default function GroupRatioSettings(props) {
               ]}
               onChange={(value) =>
                 setInputs((prev) => ({ ...prev, GroupModelPrice: value }))
+              }
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col xs={24} sm={16}>
+            <Form.TextArea
+              label={t('分组生图模型限制')}
+              placeholder={t('为一个 JSON 文本')}
+              extraText={t(
+                '键为分组名称，值为另一个 JSON 对象，键为模型名称，值为布尔值，true 表示将该模型标记为生图模型（白名单），仅允许通过 /v1/images/generations 与 /v1/images/edits 调用，其余接口一律拒绝。例如：{"gpt-image-2": {"gpt-image-2": true}}，表示 gpt-image-2 分组下的 gpt-image-2 模型仅允许经由生图接口调用',
+              )}
+              field={'GroupModelImageOnly'}
+              autosize={{ minRows: 6, maxRows: 12 }}
+              trigger='blur'
+              stopValidateWithError
+              rules={[
+                {
+                  validator: (rule, value) => verifyJSON(value),
+                  message: t('不是合法的 JSON 字符串'),
+                },
+              ]}
+              onChange={(value) =>
+                setInputs((prev) => ({ ...prev, GroupModelImageOnly: value }))
               }
             />
           </Col>

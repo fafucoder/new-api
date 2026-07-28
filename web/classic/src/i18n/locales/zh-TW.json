@@ -4355,5 +4355,10 @@
     "充值总额来源": "充值總額來源",
     "充值记录 (top_ups)": "充值記錄 (top_ups)",
     "用户额度 (users)": "用戶額度 (users)"
-  }
+  },
+  "分组生图模型限制": "分組生圖模型限制",
+  "将某个分组下的特定模型标记为生图模型（白名单）。开启后，该模型仅允许通过 /v1/images/generations 与 /v1/images/edits 接口调用，经由 chat/responses 等其他接口调用时会返回接口路径错误。适用于按次计费的生图模型，避免被错误地按 chat 接口调用。例如：gpt-image-2 分组的 gpt-image-2 标记为生图": "將某個分組下的特定模型標記為生圖模型（白名單）。開啟後，該模型僅允許透過 /v1/images/generations 與 /v1/images/edits 介面呼叫，經由 chat/responses 等其他介面呼叫時會回傳介面路徑錯誤。適用於按次計費的生圖模型，避免被錯誤地按 chat 介面呼叫。例如：gpt-image-2 分組的 gpt-image-2 標記為生圖",
+  "键为分组名称，值为另一个 JSON 对象，键为模型名称，值为布尔值，true 表示将该模型标记为生图模型（白名单），仅允许通过 /v1/images/generations 与 /v1/images/edits 调用，其余接口一律拒绝。例如：{\"gpt-image-2\": {\"gpt-image-2\": true}}，表示 gpt-image-2 分组下的 gpt-image-2 模型仅允许经由生图接口调用": "鍵為分組名稱，值為另一個 JSON 物件，鍵為模型名稱，值為布林值，true 表示將該模型標記為生圖模型（白名單），僅允許透過 /v1/images/generations 與 /v1/images/edits 呼叫，其餘介面一律拒絕。例如：{\"gpt-image-2\": {\"gpt-image-2\": true}}，表示 gpt-image-2 分組下的 gpt-image-2 模型僅允許經由生圖介面呼叫",
+  "生图": "生圖",
+  "否": "否"
 }

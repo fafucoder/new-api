@@ -116,6 +116,17 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 
+				// 校验：可在「分组与模型定价设置」中将某「分组+模型」标记为生图模型（白名单），
+				// 生图模型仅允许走 /v1/images/generations 与 /v1/images/edits，
+				// 经由其他接口（chat/responses 等）调用时直接返回 400，避免按次计费模型被错误调用。
+				if isGroupModelImageOnly(c, usingGroup, modelRequest.Model) && !isImageEndpoint(c.Request.URL.Path) {
+					// 固定英文错误信息，与尺寸校验保持一致的返回格式；request id 由 abortWithOpenAiMessage 自动追加。
+					message := "This model is not supported on the Chat Completions endpoint"
+					recordModelImageOnlyError(c, modelRequest.Model, message)
+					abortWithOpenAiMessage(c, http.StatusBadRequest, message, types.ErrorCodeInvalidRequest)
+					return
+				}
+
 				if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
 					preferred, err := model.CacheGetChannel(preferredChannelID)
 					if err == nil && preferred != nil {
@@ -461,4 +472,67 @@ func extractModelNameFromGeminiPath(path string) string {
 
 	// 返回模型名部分
 	return path[startIndex : startIndex+colonIndex]
+}
+
+// isImageEndpoint 判断请求路径是否为生图接口（/v1/images/generations 或 /v1/images/edits）。
+// 被标记为生图模型的「分组+模型」仅允许经由这两个接口调用。
+func isImageEndpoint(path string) bool {
+	switch relayconstant.Path2RelayMode(path) {
+	case relayconstant.RelayModeImagesGenerations,
+		relayconstant.RelayModeImagesEdits:
+		return true
+	default:
+		return false
+	}
+}
+
+// isGroupModelImageOnly 判断在当前分组下该模型是否被标记为生图模型（仅允许生图接口）。
+// 对于 auto 分组，遍历用户的 auto 子分组，任一子分组命中即视为生图模型。
+func isGroupModelImageOnly(c *gin.Context, usingGroup, modelName string) bool {
+	if modelName == "" {
+		return false
+	}
+	if usingGroup == "auto" {
+		userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
+		for _, g := range service.GetUserAutoGroup(userGroup) {
+			if ratio_setting.IsGroupModelImageOnly(g, modelName) {
+				return true
+			}
+		}
+		return false
+	}
+	return ratio_setting.IsGroupModelImageOnly(usingGroup, modelName)
+}
+
+// recordModelImageOnlyError 将「生图模型被非生图接口调用」的拦截写入错误日志表（LogTypeError），
+// 使后台「使用日志」能看到 status_code=400 及失败原因，与尺寸校验的日志记录保持一致。
+func recordModelImageOnlyError(c *gin.Context, modelName string, message string) {
+	userId := c.GetInt("id")
+	channelId := c.GetInt("channel_id")
+	tokenId := c.GetInt("token_id")
+	tokenName := c.GetString("token_name")
+	group := c.GetString("group")
+	if originModel := c.GetString("original_model"); originModel != "" {
+		modelName = originModel
+	}
+
+	other := make(map[string]any)
+	if c.Request != nil && c.Request.URL != nil {
+		other["request_path"] = c.Request.URL.Path
+	}
+	other["error_type"] = string(types.ErrorTypeNewAPIError)
+	other["error_code"] = string(types.ErrorCodeInvalidRequest)
+	other["status_code"] = http.StatusBadRequest
+	other["channel_id"] = channelId
+	other["channel_name"] = c.GetString("channel_name")
+	other["channel_type"] = c.GetInt("channel_type")
+
+	startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
+	if startTime.IsZero() {
+		startTime = time.Now()
+	}
+	useTimeSeconds := int(time.Since(startTime).Seconds())
+
+	content := fmt.Sprintf("status_code=%d, %s", http.StatusBadRequest, message)
+	model.RecordErrorLog(c, userId, channelId, modelName, tokenName, content, tokenId, useTimeSeconds, false, group, other)
 }

@@ -39,11 +39,19 @@ var defaultGroupModelPrice = map[string]map[string]float64{}
 
 var groupModelPriceMap = types.NewRWMap[string, map[string]float64]()
 
+// defaultGroupModelImageOnly 分组模型「仅允许生图接口」白名单：分组 -> 模型名 -> true 表示该模型为生图模型
+// 语义为白名单：仅显式配置为 true 的「分组+模型」组合被视为生图模型，只允许走 /v1/images/generations 与 /v1/images/edits，其余接口一律拒绝。
+// 典型场景：生图模型（如 gpt-image-2）不应被 /v1/chat/completions 或 /v1/responses 调用，否则按次计费异常。
+var defaultGroupModelImageOnly = map[string]map[string]bool{}
+
+var groupModelImageOnlyMap = types.NewRWMap[string, map[string]bool]()
+
 type GroupRatioSetting struct {
 	GroupRatio              *types.RWMap[string, float64]            `json:"group_ratio"`
 	GroupGroupRatio         *types.RWMap[string, map[string]float64] `json:"group_group_ratio"`
 	GroupSpecialUsableGroup *types.RWMap[string, map[string]string]  `json:"group_special_usable_group"`
 	GroupModelPrice         *types.RWMap[string, map[string]float64] `json:"group_model_price"`
+	GroupModelImageOnly  *types.RWMap[string, map[string]bool]    `json:"group_model_image_only"`
 }
 
 var groupRatioSetting GroupRatioSetting
@@ -55,12 +63,14 @@ func init() {
 	groupRatioMap.AddAll(defaultGroupRatio)
 	groupGroupRatioMap.AddAll(defaultGroupGroupRatio)
 	groupModelPriceMap.AddAll(defaultGroupModelPrice)
+	groupModelImageOnlyMap.AddAll(defaultGroupModelImageOnly)
 
 	groupRatioSetting = GroupRatioSetting{
 		GroupSpecialUsableGroup: groupSpecialUsableGroup,
 		GroupRatio:              groupRatioMap,
 		GroupGroupRatio:         groupGroupRatioMap,
 		GroupModelPrice:         groupModelPriceMap,
+		GroupModelImageOnly:  groupModelImageOnlyMap,
 	}
 
 	config.GlobalConfig.Register("group_ratio_setting", &groupRatioSetting)
@@ -73,6 +83,9 @@ func GetGroupRatioSetting() *GroupRatioSetting {
 	}
 	if groupRatioSetting.GroupModelPrice == nil {
 		groupRatioSetting.GroupModelPrice = groupModelPriceMap
+	}
+	if groupRatioSetting.GroupModelImageOnly == nil {
+		groupRatioSetting.GroupModelImageOnly = groupModelImageOnlyMap
 	}
 	return &groupRatioSetting
 }
@@ -181,4 +194,40 @@ func CheckGroupModelPrice(jsonStr string) error {
 		}
 	}
 	return nil
+}
+
+// GroupModelImageOnly2JSONString 序列化分组模型「仅允许生图接口」白名单配置
+func GroupModelImageOnly2JSONString() string {
+	return groupModelImageOnlyMap.MarshalJSONString()
+}
+
+// UpdateGroupModelImageOnlyByJSONString 从 JSON 字符串更新分组模型「仅允许生图接口」白名单配置
+func UpdateGroupModelImageOnlyByJSONString(jsonStr string) error {
+	if strings.TrimSpace(jsonStr) == "" {
+		jsonStr = "{}"
+	}
+	return types.LoadFromJsonString(groupModelImageOnlyMap, jsonStr)
+}
+
+// CheckGroupModelImageOnly 校验分组模型「仅允许生图接口」白名单 JSON 合法性
+func CheckGroupModelImageOnly(jsonStr string) error {
+	if strings.TrimSpace(jsonStr) == "" {
+		return nil
+	}
+	checkGroupModelImageOnly := make(map[string]map[string]bool)
+	return json.Unmarshal([]byte(jsonStr), &checkGroupModelImageOnly)
+}
+
+// IsGroupModelImageOnly 返回指定分组下指定模型是否为生图模型（仅允许生图接口）
+// 语义为白名单：仅当显式配置为 true 时返回 true。
+func IsGroupModelImageOnly(group, modelName string) bool {
+	gp, ok := groupModelImageOnlyMap.Get(group)
+	if !ok {
+		return false
+	}
+	disabled, ok := gp[modelName]
+	if !ok {
+		return false
+	}
+	return disabled
 }

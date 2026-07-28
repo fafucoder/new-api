@@ -4401,5 +4401,10 @@
     "充值总额来源": "Source du rechargement",
     "充值记录 (top_ups)": "Enregistrements de recharge (top_ups)",
     "用户额度 (users)": "Quota utilisateur (users)"
-  }
+  },
+  "分组生图模型限制": "Restriction du modèle d'image de groupe",
+  "将某个分组下的特定模型标记为生图模型（白名单）。开启后，该模型仅允许通过 /v1/images/generations 与 /v1/images/edits 接口调用，经由 chat/responses 等其他接口调用时会返回接口路径错误。适用于按次计费的生图模型，避免被错误地按 chat 接口调用。例如：gpt-image-2 分组的 gpt-image-2 标记为生图": "Marquer des modèles spécifiques d'un groupe comme modèles d'image (liste blanche). Une fois activé, le modèle ne peut être appelé que via /v1/images/generations et /v1/images/edits ; un appel via chat/responses ou d'autres points de terminaison renvoie une erreur de chemin d'API. Utile pour les modèles d'image facturés à l'appel afin d'éviter un appel via l'API chat. Ex. : gpt-image-2 dans le groupe gpt-image-2 est marqué comme modèle d'image",
+  "键为分组名称，值为另一个 JSON 对象，键为模型名称，值为布尔值，true 表示将该模型标记为生图模型（白名单），仅允许通过 /v1/images/generations 与 /v1/images/edits 调用，其余接口一律拒绝。例如：{\"gpt-image-2\": {\"gpt-image-2\": true}}，表示 gpt-image-2 分组下的 gpt-image-2 模型仅允许经由生图接口调用": "La clé est le nom du groupe, la valeur est un autre objet JSON dont la clé est le nom du modèle et la valeur un booléen ; true marque le modèle comme modèle d'image (liste blanche), n'autorisant que /v1/images/generations et /v1/images/edits et rejetant tous les autres points de terminaison. Ex. : {\"gpt-image-2\": {\"gpt-image-2\": true}} signifie que le modèle gpt-image-2 du groupe gpt-image-2 ne peut être appelé que via les points de terminaison d'image",
+  "生图": "Image",
+  "否": "Non"
 }

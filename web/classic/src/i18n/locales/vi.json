@@ -4923,5 +4923,10 @@
     "充值总额来源": "Nguồn nạp tiền",
     "充值记录 (top_ups)": "Lịch sử nạp tiền (top_ups)",
     "用户额度 (users)": "Hạn mức người dùng (users)"
-  }
+  },
+  "分组生图模型限制": "Giới hạn mô hình tạo ảnh theo nhóm",
+  "将某个分组下的特定模型标记为生图模型（白名单）。开启后，该模型仅允许通过 /v1/images/generations 与 /v1/images/edits 接口调用，经由 chat/responses 等其他接口调用时会返回接口路径错误。适用于按次计费的生图模型，避免被错误地按 chat 接口调用。例如：gpt-image-2 分组的 gpt-image-2 标记为生图": "Đánh dấu các mô hình cụ thể trong một nhóm là mô hình tạo ảnh (danh sách trắng). Khi bật, mô hình chỉ có thể được gọi qua /v1/images/generations và /v1/images/edits; gọi qua chat/responses hoặc các endpoint khác sẽ trả về lỗi đường dẫn API. Hữu ích cho các mô hình tạo ảnh tính phí theo lần để tránh bị gọi qua API chat. Ví dụ: gpt-image-2 trong nhóm gpt-image-2 được đánh dấu là mô hình tạo ảnh",
+  "键为分组名称，值为另一个 JSON 对象，键为模型名称，值为布尔值，true 表示将该模型标记为生图模型（白名单），仅允许通过 /v1/images/generations 与 /v1/images/edits 调用，其余接口一律拒绝。例如：{\"gpt-image-2\": {\"gpt-image-2\": true}}，表示 gpt-image-2 分组下的 gpt-image-2 模型仅允许经由生图接口调用": "Khóa là tên nhóm, giá trị là một đối tượng JSON khác có khóa là tên mô hình và giá trị là boolean; true đánh dấu mô hình là mô hình tạo ảnh (danh sách trắng), chỉ cho phép /v1/images/generations và /v1/images/edits và từ chối tất cả các endpoint khác. Ví dụ: {\"gpt-image-2\": {\"gpt-image-2\": true}} nghĩa là mô hình gpt-image-2 trong nhóm gpt-image-2 chỉ có thể được gọi qua các endpoint tạo ảnh",
+  "生图": "Tạo ảnh",
+  "否": "Không"
 }
