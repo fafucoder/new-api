@@ -12,9 +12,23 @@ import (
 )
 
 func GetGroups(c *gin.Context) {
+	groupType := c.Query("type")
+	typeMap := ratio_setting.GetGroupTypeCopy()
+
 	groupNames := make([]string, 0)
 	for groupName := range ratio_setting.GetGroupRatioCopy() {
-		groupNames = append(groupNames, groupName)
+		if groupType == "" {
+			groupNames = append(groupNames, groupName)
+			continue
+		}
+		// 未分类的分组默认视为 channel
+		t := typeMap[groupName]
+		if t == "" {
+			t = "channel"
+		}
+		if t == groupType {
+			groupNames = append(groupNames, groupName)
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

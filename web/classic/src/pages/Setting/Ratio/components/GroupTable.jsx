@@ -4,6 +4,7 @@ import {
   Input,
   InputNumber,
   Checkbox,
+  Select,
   Typography,
   Popconfirm,
 } from '@douyinfe/semi-ui';
@@ -25,9 +26,10 @@ function parseJSON(str, fallback) {
   }
 }
 
-function buildRows(groupRatioStr, userUsableGroupsStr) {
+function buildRows(groupRatioStr, userUsableGroupsStr, groupTypeStr) {
   const ratioMap = parseJSON(groupRatioStr, {});
   const usableMap = parseJSON(userUsableGroupsStr, {});
+  const typeMap = parseJSON(groupTypeStr, {});
 
   const allNames = new Set([
     ...Object.keys(ratioMap),
@@ -40,12 +42,14 @@ function buildRows(groupRatioStr, userUsableGroupsStr) {
     ratio: ratioMap[name] ?? 1,
     selectable: name in usableMap,
     description: usableMap[name] ?? '',
+    groupType: typeMap[name] || 'channel',
   }));
 }
 
 export function serializeGroupTable(rows) {
   const groupRatio = {};
   const userUsableGroups = {};
+  const groupType = {};
 
   rows.forEach((row) => {
     if (!row.name) return;
@@ -53,19 +57,23 @@ export function serializeGroupTable(rows) {
     if (row.selectable) {
       userUsableGroups[row.name] = row.description;
     }
+    if (row.groupType) {
+      groupType[row.name] = row.groupType;
+    }
   });
 
   return {
     GroupRatio: JSON.stringify(groupRatio, null, 2),
     UserUsableGroups: JSON.stringify(userUsableGroups, null, 2),
+    GroupType: JSON.stringify(groupType, null, 2),
   };
 }
 
-export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
+export default function GroupTable({ groupRatio, userUsableGroups, groupType, onChange }) {
   const { t } = useTranslation();
 
   const [rows, setRows] = useState(() =>
-    buildRows(groupRatio, userUsableGroups),
+    buildRows(groupRatio, userUsableGroups, groupType),
   );
 
   // Use functional setRows to keep updateRow/addRow/removeRow referentially
@@ -108,6 +116,7 @@ export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
           ratio: 1,
           selectable: true,
           description: '',
+          groupType: 'channel',
         },
       ];
     });
@@ -201,6 +210,24 @@ export default function GroupTable({ groupRatio, userUsableGroups, onChange }) {
               -
             </Text>
           ),
+      },
+      {
+        title: t('类型'),
+        dataIndex: 'groupType',
+        key: 'groupType',
+        width: 130,
+        render: (_, record) => (
+          <Select
+            size='small'
+            value={record.groupType || 'channel'}
+            style={{ width: '100%' }}
+            onChange={(v) => updateRow(record._id, 'groupType', v)}
+            optionList={[
+              { value: 'channel', label: t('渠道分组') },
+              { value: 'user', label: t('用户分组') },
+            ]}
+          />
+        ),
       },
       {
         title: '',

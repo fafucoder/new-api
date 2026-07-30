@@ -61,6 +61,7 @@ const OPTION_KEYS = [
   'group_ratio_setting.group_special_usable_group',
   'AutoGroups',
   'DefaultUseAutoGroup',
+  'group_ratio_setting.group_type',
 ];
 
 function parseJSONSafe(str, fallback) {
@@ -87,6 +88,7 @@ export default function GroupRatioSettings(props) {
     'group_ratio_setting.group_special_usable_group': '',
     AutoGroups: '',
     DefaultUseAutoGroup: false,
+    'group_ratio_setting.group_type': '',
   });
   const refForm = useRef();
   const [inputsRow, setInputsRow] = useState(inputs);
@@ -155,6 +157,7 @@ export default function GroupRatioSettings(props) {
       'group_ratio_setting.group_special_usable_group': '',
       AutoGroups: '',
       DefaultUseAutoGroup: false,
+      'group_ratio_setting.group_type': '',
     };
     const currentInputs = { ...defaults };
     for (let key in props.options) {
@@ -171,8 +174,13 @@ export default function GroupRatioSettings(props) {
   }, [props.options]);
 
   const handleGroupTableChange = useCallback(
-    ({ GroupRatio, UserUsableGroups }) => {
-      setInputs((prev) => ({ ...prev, GroupRatio, UserUsableGroups }));
+    ({ GroupRatio, UserUsableGroups, GroupType }) => {
+      setInputs((prev) => ({
+        ...prev,
+        GroupRatio,
+        UserUsableGroups,
+        'group_ratio_setting.group_type': GroupType,
+      }));
     },
     [],
   );
@@ -212,6 +220,7 @@ export default function GroupRatioSettings(props) {
           key={`gt_${dv}`}
           groupRatio={inputs.GroupRatio}
           userUsableGroups={inputs.UserUsableGroups}
+          groupType={inputs['group_ratio_setting.group_type']}
           onChange={handleGroupTableChange}
         />
       </Form.Section>

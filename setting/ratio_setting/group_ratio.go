@@ -46,12 +46,15 @@ var defaultGroupModelImageOnly = map[string]map[string]bool{}
 
 var groupModelImageOnlyMap = types.NewRWMap[string, map[string]bool]()
 
+var groupTypeMap = types.NewRWMap[string, string]()
+
 type GroupRatioSetting struct {
 	GroupRatio              *types.RWMap[string, float64]            `json:"group_ratio"`
 	GroupGroupRatio         *types.RWMap[string, map[string]float64] `json:"group_group_ratio"`
 	GroupSpecialUsableGroup *types.RWMap[string, map[string]string]  `json:"group_special_usable_group"`
 	GroupModelPrice         *types.RWMap[string, map[string]float64] `json:"group_model_price"`
-	GroupModelImageOnly  *types.RWMap[string, map[string]bool]    `json:"group_model_image_only"`
+	GroupModelImageOnly     *types.RWMap[string, map[string]bool]    `json:"group_model_image_only"`
+	GroupType               *types.RWMap[string, string]             `json:"group_type"`
 }
 
 var groupRatioSetting GroupRatioSetting
@@ -70,7 +73,8 @@ func init() {
 		GroupRatio:              groupRatioMap,
 		GroupGroupRatio:         groupGroupRatioMap,
 		GroupModelPrice:         groupModelPriceMap,
-		GroupModelImageOnly:  groupModelImageOnlyMap,
+		GroupModelImageOnly:     groupModelImageOnlyMap,
+		GroupType:               groupTypeMap,
 	}
 
 	config.GlobalConfig.Register("group_ratio_setting", &groupRatioSetting)
@@ -87,11 +91,18 @@ func GetGroupRatioSetting() *GroupRatioSetting {
 	if groupRatioSetting.GroupModelImageOnly == nil {
 		groupRatioSetting.GroupModelImageOnly = groupModelImageOnlyMap
 	}
+	if groupRatioSetting.GroupType == nil {
+		groupRatioSetting.GroupType = groupTypeMap
+	}
 	return &groupRatioSetting
 }
 
 func GetGroupRatioCopy() map[string]float64 {
 	return groupRatioMap.ReadAll()
+}
+
+func GetGroupTypeCopy() map[string]string {
+	return groupTypeMap.ReadAll()
 }
 
 func ContainsGroupRatio(name string) bool {

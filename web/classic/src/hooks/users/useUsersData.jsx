@@ -237,7 +237,7 @@ export const useUsersData = () => {
   // Fetch groups data
   const fetchGroups = async () => {
     try {
-      let res = await API.get(`/api/group/`);
+      let res = await API.get(`/api/group/?type=user`);
       if (res === undefined) {
         return;
       }
