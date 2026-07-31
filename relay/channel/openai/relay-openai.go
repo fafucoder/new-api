@@ -27,6 +27,10 @@ func sendStreamData(c *gin.Context, info *relaycommon.RelayInfo, data string, fo
 		return nil
 	}
 
+	if info.ChannelSetting.OpenRouterKimiConvert {
+		data = ConvertOpenRouterKimiStreamChunk(data)
+	}
+
 	unifyModel := info.GetClientFacingModelName()
 
 	if !forceFormat && !thinkToContent && unifyModel == "" {
@@ -223,6 +227,10 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 			logger.LogError(c, fmt.Sprintf("openrouter enterprise response success=false, data: %s", enterpriseResponse.Data))
 			return nil, types.NewOpenAIError(fmt.Errorf("openrouter response success=false"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 		}
+	}
+
+	if info.ChannelSetting.OpenRouterKimiConvert {
+		responseBody, _ = ConvertOpenRouterKimiResponse(responseBody)
 	}
 
 	err = common.Unmarshal(responseBody, &simpleResponse)
