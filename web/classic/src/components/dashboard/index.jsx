@@ -35,6 +35,9 @@ import SearchModal from './modals/SearchModal';
 import { useDashboardData } from '../../hooks/dashboard/useDashboardData';
 import { useDashboardStats } from '../../hooks/dashboard/useDashboardStats';
 import { useDashboardCharts } from '../../hooks/dashboard/useDashboardCharts';
+import { exportModelConsumptionExcel } from '../../helpers/exportModelConsumption';
+import { getQuotaPerUnit } from '../../helpers/render';
+import { showError, showSuccess } from '../../helpers';
 
 import {
   CHART_CONFIG,
@@ -171,6 +174,32 @@ const Dashboard = () => {
     await initChart();
   };
 
+  // 将「模型消耗统计」列表导出为 Excel 报表
+  const handleExportModelSummary = async () => {
+    const t = dashboardData.t;
+    const modelSummary = dashboardData.adminQueryResult?.model_summary || [];
+    if (!modelSummary.length) {
+      showError(t('暂无数据'));
+      return;
+    }
+    // 依据查询区间的结束时间推导「年.月」期间
+    const endTs = dashboardData.adminQueryEndTs || Math.floor(Date.now() / 1000);
+    const d = new Date(endTs * 1000);
+    const period = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const username = dashboardData.adminQueryUsername || 'user';
+    try {
+      await exportModelConsumptionExcel({
+        modelSummary,
+        username,
+        period,
+        quotaPerUnit: getQuotaPerUnit(),
+      });
+      showSuccess(t('报表已下载'));
+    } catch (e) {
+      showError(t('报表下载失败') + ': ' + (e?.message || e));
+    }
+  };
+
   // ========== Effects ==========
   useEffect(() => {
     initChart();
@@ -230,6 +259,7 @@ const Dashboard = () => {
             modelSummary={dashboardData.adminQueryResult?.model_summary || null}
             isAdminUser={dashboardData.isAdminUser}
             adminQueryActive={dashboardData.adminQueryActive}
+            onExportModelSummary={handleExportModelSummary}
             CARD_PROPS={CARD_PROPS}
             CHART_CONFIG={CHART_CONFIG}
             FLEX_CENTER_GAP2={FLEX_CENTER_GAP2}

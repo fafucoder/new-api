@@ -18,8 +18,8 @@ For commercial licensing, please contact support@quantumnous.com
 */
 
 import React from 'react';
-import { Card, Tabs, TabPane, Table, Empty } from '@douyinfe/semi-ui';
-import { PieChart } from 'lucide-react';
+import { Card, Tabs, TabPane, Table, Empty, Button } from '@douyinfe/semi-ui';
+import { PieChart, Download } from 'lucide-react';
 import { VChart } from '@visactor/react-vchart';
 import { renderQuota } from '../../helpers/render';
 
@@ -35,6 +35,7 @@ const ChartsPanel = ({
   modelSummary,
   isAdminUser,
   adminQueryActive,
+  onExportModelSummary,
   CARD_PROPS,
   CHART_CONFIG,
   FLEX_CENTER_GAP2,
@@ -77,6 +78,18 @@ const ChartsPanel = ({
       <div className='h-96 p-2'>
         {activeChartTab === '0' && adminQueryActive && modelSummary && (
           <div className='h-full overflow-auto'>
+            <div className='flex justify-end mb-2'>
+              <Button
+                theme='light'
+                type='primary'
+                size='small'
+                icon={<Download size={14} />}
+                disabled={!modelSummary || modelSummary.length === 0}
+                onClick={onExportModelSummary}
+              >
+                {t('下载报表')}
+              </Button>
+            </div>
             <Table
               dataSource={modelSummary}
               pagination={false}

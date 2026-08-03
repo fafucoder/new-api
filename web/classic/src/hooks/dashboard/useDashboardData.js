@@ -86,6 +86,8 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
   const [adminQueryLabel, setAdminQueryLabel] = useState('');
   const [adminQueryResult, setAdminQueryResult] = useState(null);
   const [adminQueryLoading, setAdminQueryLoading] = useState(false);
+  // 查询区间的结束时间戳（秒），用于导出报表时推导「年.月」期间
+  const [adminQueryEndTs, setAdminQueryEndTs] = useState(0);
 
   // ========== Uptime 数据 ==========
   const [uptimeData, setUptimeData] = useState([]);
@@ -275,6 +277,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
         setAdminQueryUsername(username);
         setAdminQueryRange(timeOpts.range || 'custom');
         setAdminQueryLabel(timeOpts.label || '');
+        setAdminQueryEndTs(timeOpts.endTimestamp || Math.floor(Date.now() / 1000));
         setAdminQueryActive(true);
         return result;
       } else {
@@ -294,6 +297,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     setAdminQueryUsername('');
     setAdminQueryRange('7d');
     setAdminQueryLabel('');
+    setAdminQueryEndTs(0);
     setAdminQueryResult(null);
   }, []);
 
@@ -387,6 +391,7 @@ export const useDashboardData = (userState, userDispatch, statusState) => {
     adminQueryUsername,
     adminQueryRange,
     adminQueryLabel,
+    adminQueryEndTs,
     adminQueryResult,
     adminQueryLoading,
     loadAdminUserStats,
