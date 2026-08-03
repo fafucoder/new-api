@@ -199,7 +199,7 @@ const EditChannelModal = (props) => {
     support_4k: false,
     responses_to_chat_enabled: false,
     unify_model_name: false,
-    openrouter_kimi_convert: false,
+    kimi_convert: false,
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -526,7 +526,7 @@ const EditChannelModal = (props) => {
     support_4k: false,
     responses_to_chat_enabled: false,
     unify_model_name: false,
-    openrouter_kimi_convert: false,
+    kimi_convert: false,
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -885,7 +885,7 @@ const EditChannelModal = (props) => {
           data.responses_to_chat_enabled =
             parsedSettings.responses_to_chat_enabled || false;
           data.unify_model_name = parsedSettings.unify_model_name || false;
-          data.openrouter_kimi_convert = parsedSettings.openrouter_kimi_convert || false;
+          data.kimi_convert = parsedSettings.kimi_convert || false;
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -898,7 +898,7 @@ const EditChannelModal = (props) => {
           data.support_4k = false;
           data.responses_to_chat_enabled = false;
           data.unify_model_name = false;
-          data.openrouter_kimi_convert = false;
+          data.kimi_convert = false;
         }
       } else {
         data.force_format = false;
@@ -911,7 +911,7 @@ const EditChannelModal = (props) => {
         data.support_4k = false;
         data.responses_to_chat_enabled = false;
         data.unify_model_name = false;
-        data.openrouter_kimi_convert = false;
+        data.kimi_convert = false;
       }
 
       if (data.settings) {
@@ -1024,7 +1024,7 @@ const EditChannelModal = (props) => {
         disable_probe: data.disable_probe || false,
         responses_to_chat_enabled: data.responses_to_chat_enabled || false,
         unify_model_name: data.unify_model_name || false,
-        openrouter_kimi_convert: data.openrouter_kimi_convert || false,
+        kimi_convert: data.kimi_convert || false,
       });
       initialModelsRef.current = (data.models || [])
         .map((model) => (model || '').trim())
@@ -1070,7 +1070,7 @@ const EditChannelModal = (props) => {
         data.disable_probe ||
         data.responses_to_chat_enabled ||
         data.unify_model_name ||
-        data.openrouter_kimi_convert ||
+        data.kimi_convert ||
         data.system_prompt_override;
       if (hasAdvancedValues) {
         setAdvancedSettingsOpen(true);
@@ -1422,7 +1422,7 @@ const EditChannelModal = (props) => {
       support_4k: false,
       responses_to_chat_enabled: false,
       unify_model_name: false,
-      openrouter_kimi_convert: false,
+      kimi_convert: false,
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1797,7 +1797,7 @@ const EditChannelModal = (props) => {
       support_4k: localInputs.support_4k || false,
       responses_to_chat_enabled: localInputs.responses_to_chat_enabled || false,
       unify_model_name: localInputs.unify_model_name || false,
-      openrouter_kimi_convert: localInputs.openrouter_kimi_convert || false,
+      kimi_convert: localInputs.kimi_convert || false,
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -1883,7 +1883,7 @@ const EditChannelModal = (props) => {
     delete localInputs.support_4k;
     delete localInputs.responses_to_chat_enabled;
     delete localInputs.unify_model_name;
-    delete localInputs.openrouter_kimi_convert;
+    delete localInputs.kimi_convert;
     delete localInputs.is_enterprise_account;
     // 顶层的 vertex_key_type 不应发送给后端
     delete localInputs.vertex_key_type;
@@ -2589,7 +2589,7 @@ const EditChannelModal = (props) => {
 
                   <Form.Switch field='thinking_to_content' label={t('思考内容转换')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('thinking_to_content', value)} extraText={t('将 reasoning_content 转换为 <think> 标签拼接到内容中')} />
 
-                  <Form.Switch field='openrouter_kimi_convert' label={t('OpenRouter Kimi 格式转换')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('openrouter_kimi_convert', value)} extraText={t('开启后，将 OpenRouter 返回的 Kimi 响应格式转换为官方 Kimi 格式（重命名 reasoning 为 reasoning_content，清理多余字段）')} />
+                  <Form.Switch field='kimi_convert' label={t('Kimi 格式转换')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('kimi_convert', value)} extraText={t('开启后，将非官方渠道（如 OpenRouter 等）返回的 Kimi 响应格式对齐为官方 Kimi 格式（重命名 reasoning 为 reasoning_content，仅保留官方字段、去除多余字段）')} />
 
                   <Form.Switch field='pass_through_body_enabled' label={t('透传请求体')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('pass_through_body_enabled', value)} extraText={t('启用请求体透传功能')} />
                   <Form.Switch field='disable_probe' label={t('禁用探测')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('disable_probe', value)} extraText={t('开启后,批量"测试所有通道"和定时可用性探测将跳过此渠道')} />

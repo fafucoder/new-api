@@ -27,8 +27,8 @@ func sendStreamData(c *gin.Context, info *relaycommon.RelayInfo, data string, fo
 		return nil
 	}
 
-	if info.ChannelSetting.OpenRouterKimiConvert {
-		data = ConvertOpenRouterKimiStreamChunk(data)
+	if info.ChannelSetting.KimiConvert {
+		data = ConvertKimiStreamChunk(data)
 	}
 
 	unifyModel := info.GetClientFacingModelName()
@@ -229,8 +229,8 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		}
 	}
 
-	if info.ChannelSetting.OpenRouterKimiConvert {
-		responseBody, _ = ConvertOpenRouterKimiResponse(responseBody)
+	if info.ChannelSetting.KimiConvert {
+		responseBody, _ = ConvertKimiResponse(responseBody)
 	}
 
 	err = common.Unmarshal(responseBody, &simpleResponse)
