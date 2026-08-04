@@ -230,13 +230,13 @@ type Usage struct {
 
 	PromptTokensDetails    InputTokenDetails  `json:"prompt_tokens_details"`
 	CompletionTokenDetails OutputTokenDetails `json:"completion_tokens_details"`
-	InputTokens            int                `json:"input_tokens"`
-	OutputTokens           int                `json:"output_tokens"`
-	InputTokensDetails     *InputTokenDetails `json:"input_tokens_details"`
+	InputTokens            int                `json:"input_tokens,omitempty"`
+	OutputTokens           int                `json:"output_tokens,omitempty"`
+	InputTokensDetails     *InputTokenDetails `json:"input_tokens_details,omitempty"`
 
 	// claude cache 1h
-	ClaudeCacheCreation5mTokens int `json:"claude_cache_creation_5_m_tokens"`
-	ClaudeCacheCreation1hTokens int `json:"claude_cache_creation_1_h_tokens"`
+	ClaudeCacheCreation5mTokens int `json:"claude_cache_creation_5_m_tokens,omitempty"`
+	ClaudeCacheCreation1hTokens int `json:"claude_cache_creation_1_h_tokens,omitempty"`
 
 	// OpenRouter Params
 	Cost any `json:"cost,omitempty"`
