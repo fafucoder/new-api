@@ -16,6 +16,10 @@ type ChannelSettings struct {
 	// 用于上游返回的模型名与请求名不一致/不稳定的场景。
 	UnifyModelName          bool `json:"unify_model_name,omitempty"`
 	KimiConvert             bool `json:"kimi_convert,omitempty"`
+	// NFanoutEnabled 开启后，对上游不支持 n 参数的渠道（如 DeepSeek），
+	// 网关会将客户端的 n>1 请求在内部拆成 N 个 n=1 的并发上游请求，
+	// 再把结果合并为包含 N 条 choices 的响应返回，用量按 N 份累加。
+	NFanoutEnabled bool `json:"n_fanout_enabled,omitempty"`
 }
 
 type VertexKeyType string
