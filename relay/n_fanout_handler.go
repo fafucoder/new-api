@@ -42,6 +42,44 @@ type nFanoutResult struct {
 	err  error
 }
 
+// doFanoutSubRequestOnce 发送单份 n=1 的子请求；失败（DoRequest 报错或响应非法）时
+// 兜底重试一次，尽量补齐这一份结果。返回的 *http.Response 可能仍为非 200，
+// 由上层统一按状态码处理。
+func doFanoutSubRequestOnce(c *gin.Context, info *relaycommon.RelayInfo, adaptor channel.Adaptor, bodyBytes []byte, idx int) nFanoutResult {
+	// attempt: 0 = 首次，1 = 兜底重试
+	var lastErr error
+	for attempt := 0; attempt <= 1; attempt++ {
+		// 每次尝试使用独立的 buffer，避免 Reader 被消费后无法复用
+		buf := bytes.NewBuffer(bodyBytes)
+		resp, err := adaptor.DoRequest(c, info, buf)
+		if err != nil {
+			lastErr = fmt.Errorf("fanout sub-request #%d failed: %w", idx, err)
+			if attempt == 0 {
+				logger.LogWarn(c, fmt.Sprintf("n fanout: sub-request #%d attempt failed, retrying once: %s", idx, err.Error()))
+			}
+			continue
+		}
+		httpResp, ok := resp.(*http.Response)
+		if !ok || httpResp == nil {
+			lastErr = fmt.Errorf("fanout sub-request #%d got invalid response", idx)
+			if attempt == 0 {
+				logger.LogWarn(c, fmt.Sprintf("n fanout: sub-request #%d got invalid response, retrying once", idx))
+			}
+			continue
+		}
+		// 非 200 也视为失败并兜底重试一次（限流 429、上游 5xx 等）。
+		// 首次非 200 时关闭响应体避免泄漏；重试仍非 200 则返回该响应，交上层按错误处理。
+		if httpResp.StatusCode != http.StatusOK && attempt == 0 {
+			logger.LogWarn(c, fmt.Sprintf("n fanout: sub-request #%d got status %d, retrying once", idx, httpResp.StatusCode))
+			service.CloseResponseBodyGracefully(httpResp)
+			lastErr = fmt.Errorf("fanout sub-request #%d got status %d", idx, httpResp.StatusCode)
+			continue
+		}
+		return nFanoutResult{resp: httpResp}
+	}
+	return nFanoutResult{err: lastErr}
+}
+
 // nFanoutHelper 将一个 n>1 的请求拆成 n 份 n=1 的并发上游请求，
 // 再把结果合并为包含 n 条 choices 的响应返回。用量按 n 份累加。
 //
@@ -76,17 +114,7 @@ func nFanoutHelper(c *gin.Context, info *relaycommon.RelayInfo, adaptor channel.
 		}
 		gopool.Go(func() {
 			defer wg.Done()
-			resp, err := adaptor.DoRequest(c, info, bytes.NewBuffer(bodyBytes))
-			if err != nil {
-				results[idx] = nFanoutResult{err: fmt.Errorf("fanout sub-request #%d failed: %w", idx, err)}
-				return
-			}
-			httpResp, ok := resp.(*http.Response)
-			if !ok || httpResp == nil {
-				results[idx] = nFanoutResult{err: fmt.Errorf("fanout sub-request #%d got invalid response", idx)}
-				return
-			}
-			results[idx] = nFanoutResult{resp: httpResp}
+			results[idx] = doFanoutSubRequestOnce(c, info, adaptor, bodyBytes, idx)
 		})
 	}
 	wg.Wait()
