@@ -229,6 +229,131 @@ func TestRequestProbeMissingFieldReturnsNil(t *testing.T) {
 	}
 }
 
+const videoPricingExpr = `(param("metadata.resolution") == "480p" || param("resolution") == "480p") && !(param("has_reference_video") == true || has(param("metadata.content.#.type"), "video_url")) ? tier("video|480p|0", c * 8) : (param("has_reference_video") == true || has(param("metadata.content.#.type"), "video_url")) ? tier("video|720p|1|default", c * 46) : tier("video|720p|0|default", c * 10)`
+
+func TestVideoPricingExpression(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		wantCost float64
+		wantTier string
+	}{
+		{
+			name:     "720p without reference video",
+			body:     `{"metadata":{"resolution":"720p"}}`,
+			wantCost: 108900 * 10,
+			wantTier: "video|720p|0|default",
+		},
+		{
+			name:     "720p with reference video",
+			body:     `{"metadata":{"resolution":"720P","content":[{"type":"video_url","video_url":{"url":"https://example.com/reference.mp4"}}]}}`,
+			wantCost: 108900 * 46,
+			wantTier: "video|720p|1|default",
+		},
+		{
+			name:     "explicit reference video flag",
+			body:     `{"resolution":"720p","has_reference_video":true}`,
+			wantCost: 108900 * 46,
+			wantTier: "video|720p|1|default",
+		},
+		{
+			name:     "missing resolution uses configured default",
+			body:     `{"prompt":"hello"}`,
+			wantCost: 108900 * 10,
+			wantTier: "video|720p|0|default",
+		},
+		{
+			name:     "non-default resolution still matches exactly",
+			body:     `{"resolution":"480p"}`,
+			wantCost: 108900 * 8,
+			wantTier: "video|480p|0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cost, trace, err := billingexpr.RunExprWithRequest(
+				videoPricingExpr,
+				billingexpr.TokenParams{C: 108900},
+				billingexpr.RequestInput{Body: []byte(tt.body)},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if math.Abs(cost-tt.wantCost) > 1e-6 {
+				t.Fatalf("cost = %f, want %f", cost, tt.wantCost)
+			}
+			if trace.MatchedTier != tt.wantTier {
+				t.Fatalf("tier = %q, want %q", trace.MatchedTier, tt.wantTier)
+			}
+		})
+	}
+}
+
+func TestParseVideoTierLabel(t *testing.T) {
+	info, ok := billingexpr.ParseVideoTierLabel("video|720p|1|default")
+	if !ok {
+		t.Fatal("expected video tier label to parse")
+	}
+	if info.Resolution != "720p" || !info.HasReferenceVideo || !info.Default {
+		t.Fatalf("unexpected tier info: %+v", info)
+	}
+	if _, ok := billingexpr.ParseVideoTierLabel("video|fallback"); ok {
+		t.Fatal("legacy fallback label must not parse as a priced video tier")
+	}
+}
+
+func TestExtractVideoRequestInfo(t *testing.T) {
+	tests := []struct {
+		name             string
+		body             string
+		wantResolution   string
+		wantReference    bool
+		wantVideoRequest bool
+	}{
+		{
+			name:             "metadata content reference",
+			body:             `{"metadata":{"resolution":"720P","content":[{"type":"video_url"}]}}`,
+			wantResolution:   "720p",
+			wantReference:    true,
+			wantVideoRequest: true,
+		},
+		{
+			name:             "explicit false reference",
+			body:             `{"size":"480p","has_reference_video":false}`,
+			wantResolution:   "480p",
+			wantReference:    false,
+			wantVideoRequest: true,
+		},
+		{
+			name:             "null flag falls through to video url",
+			body:             `{"metadata":{"has_reference_video":null,"video_url":"https://example.com/reference.mp4"}}`,
+			wantReference:    true,
+			wantVideoRequest: true,
+		},
+		{
+			name:             "not a video pricing request",
+			body:             `{"prompt":"hello"}`,
+			wantVideoRequest: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			info, ok := billingexpr.ExtractVideoRequestInfo(billingexpr.RequestInput{Body: []byte(tt.body)})
+			if ok != tt.wantVideoRequest {
+				t.Fatalf("ok = %v, want %v", ok, tt.wantVideoRequest)
+			}
+			if info.Resolution != tt.wantResolution {
+				t.Fatalf("resolution = %q, want %q", info.Resolution, tt.wantResolution)
+			}
+			if info.HasReferenceVideo != tt.wantReference {
+				t.Fatalf("reference video = %v, want %v", info.HasReferenceVideo, tt.wantReference)
+			}
+		})
+	}
+}
+
 func TestRequestProbeMultipleRulesMultiply(t *testing.T) {
 	cost, _, err := billingexpr.RunExprWithRequest(
 		`(param("service_tier") == "fast" ? 2 : 1) * (has(header("anthropic-beta"), "fast-mode-2026-02-01") ? 2.5 : 1)`,

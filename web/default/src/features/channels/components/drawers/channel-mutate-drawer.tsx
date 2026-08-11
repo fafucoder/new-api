@@ -217,6 +217,15 @@ const MODEL_MAPPING_PREVIEW_FALLBACK: Array<{
 
 const ADVANCED_SETTINGS_EXPANDED_KEY = 'channel-advanced-settings-expanded'
 const UPSTREAM_DETECTED_MODEL_PREVIEW_LIMIT = 8
+const ASSET_LIBRARY_PATH_FIELDS = [
+  ['asset_library_list_path', 'List groups path'],
+  ['asset_library_create_path', 'Create group and upload path'],
+  ['asset_library_detail_path', 'Group detail path'],
+  ['asset_library_append_path', 'Append files path'],
+  ['asset_library_import_url_path', 'Import URL path'],
+  ['asset_library_import_urls_path', 'Batch import URLs path'],
+  ['asset_library_delete_asset_path', 'Delete asset path'],
+] as const
 
 function readAdvancedSettingsPreference(): boolean {
   if (typeof window === 'undefined') return false
@@ -242,7 +251,8 @@ function hasAdvancedSettingsValues(values: ChannelFormValues): boolean {
     values.claude_beta_query ||
     values.upstream_model_update_check_enabled ||
     values.upstream_model_update_auto_sync_enabled ||
-    values.upstream_model_update_ignored_models?.trim()
+    values.upstream_model_update_ignored_models?.trim() ||
+    values.asset_library_enabled
   )
 }
 
@@ -400,6 +410,7 @@ export function ChannelMutateDrawer({
     'upstream_model_update_check_enabled'
   )
   const currentSettings = form.watch('settings')
+  const assetLibraryEnabled = form.watch('asset_library_enabled')
   const {
     unlocked: doubaoApiEditUnlocked,
     handleClick: handleApiConfigSecretClick,
@@ -2864,6 +2875,94 @@ export function ChannelMutateDrawer({
                         )}
                       />
                     </div>
+                  </div>
+
+                  <div className='bg-card space-y-4 rounded-xl border p-5'>
+                    <CardHeading
+                      title={t('Asset Library Mapping')}
+                      icon={<Boxes className='h-4 w-4' />}
+                    />
+                    <FormField
+                      control={form.control}
+                      name='asset_library_enabled'
+                      render={({ field }) => (
+                        <FormItem className='flex items-center justify-between gap-3 rounded-lg border p-4'>
+                          <div className='space-y-0.5'>
+                            <FormLabel>{t('Enable asset library for this channel')}</FormLabel>
+                            <FormDescription>
+                              {t(
+                                'Uploads are synchronized to every enabled channel mapping'
+                              )}
+                            </FormDescription>
+                          </div>
+                          <FormControl>
+                            <Switch
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    {assetLibraryEnabled && (
+                      <div className='space-y-4'>
+                        <FormField
+                          control={form.control}
+                          name='asset_library_base_url'
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>{t('Asset API base URL')}</FormLabel>
+                              <FormControl>
+                                <Input
+                                  value={field.value || ''}
+                                  onChange={field.onChange}
+                                  placeholder={currentBaseUrl || 'https://api.example.com'}
+                                />
+                              </FormControl>
+                              <FormDescription>
+                                {t(
+                                  'Leave empty to use the channel base URL; endpoint paths are never inferred'
+                                )}
+                              </FormDescription>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <div className='grid gap-4 sm:grid-cols-2'>
+                          {ASSET_LIBRARY_PATH_FIELDS.map(([name, label]) => (
+                            <FormField
+                              key={name}
+                              control={form.control}
+                              name={name}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>{t(label)}</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      value={field.value || ''}
+                                      onChange={field.onChange}
+                                      className='font-mono text-xs'
+                                    />
+                                  </FormControl>
+                                  {(name === 'asset_library_detail_path' ||
+                                    name === 'asset_library_append_path' ||
+                                    name ===
+                                      'asset_library_delete_asset_path') && (
+                                    <FormDescription className='font-mono text-xs'>
+                                      {'{groupId}'}
+                                      {name ===
+                                        'asset_library_delete_asset_path' &&
+                                        ' · {assetId}'}
+                                    </FormDescription>
+                                  )}
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* ── Extra Settings ── */}

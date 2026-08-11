@@ -45,6 +45,10 @@ type TaskAdaptor interface {
 	// Return nil to use the base model price without extra ratios.
 	EstimateBilling(c *gin.Context, info *relaycommon.RelayInfo) map[string]float64
 
+	// EstimateTokenCount returns expected completion-token usage for task
+	// billing. Expression-priced tasks use it for pre-consume estimation.
+	EstimateTokenCount(c *gin.Context, info *relaycommon.RelayInfo) int
+
 	// AdjustBillingOnSubmit returns adjusted OtherRatios from the upstream
 	// submit response. Called after a successful DoResponse.
 	// If the upstream returned actual parameters that differ from the estimate

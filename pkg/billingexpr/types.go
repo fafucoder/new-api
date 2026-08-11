@@ -53,6 +53,7 @@ type BillingSnapshot struct {
 
 // TieredResult holds everything needed after running tiered settlement.
 type TieredResult struct {
+	ActualCost             float64 `json:"actual_cost"`
 	ActualQuotaBeforeGroup float64 `json:"actual_quota_before_group"`
 	ActualQuotaAfterGroup  int     `json:"actual_quota_after_group"`
 	MatchedTier            string  `json:"matched_tier"`

@@ -38,6 +38,8 @@ import {
   renderModelPrice,
   renderTieredModelPrice,
   renderTaskBillingProcess,
+  convertUSDToCurrency,
+  getCurrencyConfig,
 } from '../../helpers';
 import { ITEMS_PER_PAGE } from '../../constants';
 import { useTableCompactMode } from '../common/useTableCompactMode';
@@ -164,7 +166,9 @@ export const useLogsData = () => {
   };
 
   // Column visibility state
-  const [visibleColumns, setVisibleColumns] = useState(getInitialVisibleColumns);
+  const [visibleColumns, setVisibleColumns] = useState(
+    getInitialVisibleColumns,
+  );
   const [showColumnSelector, setShowColumnSelector] = useState(false);
   const [billingDisplayMode, setBillingDisplayMode] = useState(
     getInitialBillingDisplayMode,
@@ -383,7 +387,10 @@ export const useLogsData = () => {
       let other = getLogOther(logs[i].other);
       let expandDataLocal = [];
 
-      if (isAdminUser && (logs[i].type === 0 || logs[i].type === 2 || logs[i].type === 6)) {
+      if (
+        isAdminUser &&
+        (logs[i].type === 0 || logs[i].type === 2 || logs[i].type === 6)
+      ) {
         expandDataLocal.push({
           key: t('渠道信息'),
           value: `${logs[i].channel} - ${logs[i].channel_name || '[未知]'}`,
@@ -430,7 +437,10 @@ export const useLogsData = () => {
           expandDataLocal.push({
             key: t('日志详情'),
             value: other?.claude
-              ? renderClaudeLogContent({ ...other, displayMode: billingDisplayMode })
+              ? renderClaudeLogContent({
+                  ...other,
+                  displayMode: billingDisplayMode,
+                })
               : renderLogContent({ ...other, displayMode: billingDisplayMode }),
           });
         }
@@ -497,7 +507,89 @@ export const useLogsData = () => {
             value: other.reasoning_effort,
           });
         }
-        if (other?.billing_mode === 'tiered_expr' && other?.expr_b64) {
+        if (other?.video_billing) {
+          const videoBilling = other.video_billing;
+          const tokens = videoBilling.tokens ?? logs[i].completion_tokens ?? 0;
+          const unitPriceUSD = Number(videoBilling.unit_price_usd) || 0;
+          const groupRatio =
+            Number(videoBilling.group_ratio ?? other.group_ratio) || 1;
+          const finalAmountUSD =
+            videoBilling.final_amount_usd ??
+            (videoBilling.amount_before_group_usd ??
+              (tokens * unitPriceUSD) / 1000000) * groupRatio;
+          const deductedAmountUSD =
+            videoBilling.deducted_amount_usd ?? finalAmountUSD;
+          const unitPrice = convertUSDToCurrency(unitPriceUSD, 4);
+          const finalAmount = convertUSDToCurrency(finalAmountUSD, 5);
+          const currencyType = getCurrencyConfig().type;
+          const currencyLabel =
+            currencyType === 'TOKENS' ? 'USD' : currencyType;
+          const ratioText = `${groupRatio.toFixed(4)}x`;
+          const groupRatioText = logs[i].group
+            ? `${logs[i].group} (${ratioText})`
+            : ratioText;
+
+          expandDataLocal.push(
+            {
+              key: t('计费模式'),
+              value: other?.admin_info?.local_count_tokens
+                ? t('本地用量计费')
+                : t('上游返回用量计费'),
+            },
+            { key: t('令牌'), value: Number(tokens).toLocaleString() },
+            {
+              key: t('单价'),
+              value: `${unitPrice} / 1M Tokens`,
+            },
+            {
+              key: t('计价单位'),
+              value: `${currencyLabel} / 1M Tokens`,
+            },
+            {
+              key: t('分辨率'),
+              value: videoBilling.resolution || '-',
+            },
+            {
+              key: t('参考视频'),
+              value: videoBilling.reference_video ? t('是') : t('否'),
+            },
+            { key: t('分组倍率'), value: groupRatioText },
+            {
+              key: t('计费过程'),
+              value: `${Number(tokens).toLocaleString()} × ${unitPrice} / 1M Tokens × ${groupRatio.toFixed(4)} = ${finalAmount}`,
+            },
+            { key: t('最终金额'), value: finalAmount },
+            {
+              key: t('扣费金额'),
+              value: convertUSDToCurrency(deductedAmountUSD, 5),
+            },
+          );
+
+          if (videoBilling.video_url) {
+            expandDataLocal.push({
+              key: t('视频链接'),
+              value: (
+                <a
+                  href={videoBilling.video_url}
+                  target='_blank'
+                  rel='noreferrer'
+                  style={{
+                    display: 'inline-block',
+                    maxWidth: 600,
+                    wordBreak: 'break-all',
+                  }}
+                >
+                  {videoBilling.video_url}
+                </a>
+              ),
+            });
+          }
+        }
+        if (
+          other?.billing_mode === 'tiered_expr' &&
+          other?.expr_b64 &&
+          !other?.video_billing
+        ) {
           expandDataLocal.push({
             key: t('计费过程'),
             value: renderTieredModelPrice({
@@ -520,7 +612,14 @@ export const useLogsData = () => {
           expandDataLocal.push({
             key: t('失败原因'),
             value: (
-              <div style={{ maxWidth: 600, whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.6 }}>
+              <div
+                style={{
+                  maxWidth: 600,
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.6,
+                }}
+              >
                 {other.reason}
               </div>
             ),
@@ -537,7 +636,8 @@ export const useLogsData = () => {
         const ss = other.stream_status;
         const isOk = ss.status === 'ok';
         const statusLabel = isOk ? '✓ ' + t('正常') : '✗ ' + t('异常');
-        let streamValue = statusLabel + ' (' + (ss.end_reason || 'unknown') + ')';
+        let streamValue =
+          statusLabel + ' (' + (ss.end_reason || 'unknown') + ')';
         if (ss.error_count > 0) {
           streamValue += ` [${t('软错误')}: ${ss.error_count}]`;
         }
@@ -552,7 +652,14 @@ export const useLogsData = () => {
           expandDataLocal.push({
             key: t('流错误详情'),
             value: (
-              <div style={{ maxWidth: 600, whiteSpace: 'pre-line', wordBreak: 'break-word', lineHeight: 1.6 }}>
+              <div
+                style={{
+                  maxWidth: 600,
+                  whiteSpace: 'pre-line',
+                  wordBreak: 'break-word',
+                  lineHeight: 1.6,
+                }}
+              >
                 {ss.errors.join('\n')}
               </div>
             ),

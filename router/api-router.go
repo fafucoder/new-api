@@ -182,6 +182,19 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			channelUptimeRoute.GET("/status", controller.GetChannelUptimeStatus)
 		}
+		assetLibraryRoute := apiRouter.Group("/asset-library")
+		assetLibraryRoute.Use(middleware.UserAuth())
+		{
+			assetLibraryRoute.GET("/channels", controller.GetAssetLibraryChannels)
+			assetLibraryRoute.GET("/groups", controller.GetAssetLibraryGroups)
+			assetLibraryRoute.POST("/groups", middleware.CriticalRateLimit(), controller.PostAssetLibraryGroup)
+			assetLibraryRoute.GET("/groups/:id", controller.GetAssetLibraryGroup)
+			assetLibraryRoute.PATCH("/groups/:id", controller.PatchAssetLibraryGroup)
+			assetLibraryRoute.DELETE("/groups/:id", controller.DeleteAssetLibraryGroup)
+			assetLibraryRoute.POST("/groups/:id/refresh", controller.PostRefreshAssetLibraryGroup)
+			assetLibraryRoute.POST("/groups/:id/assets", middleware.CriticalRateLimit(), controller.PostAssetLibraryGroupAssets)
+			assetLibraryRoute.DELETE("/groups/:id/assets/:assetId", controller.DeleteAssetLibraryAsset)
+		}
 		modelUptimeRoute := apiRouter.Group("/model-uptime")
 		modelUptimeRoute.Use(middleware.UserAuth())
 		{
@@ -410,7 +423,23 @@ func SetApiRouter(router *gin.Engine) {
 		taskRoute := apiRouter.Group("/task")
 		{
 			taskRoute.GET("/self", middleware.UserAuth(), controller.GetUserTask)
+			taskRoute.DELETE("/self/:task_id", middleware.UserAuth(), controller.DeleteUserTask)
 			taskRoute.GET("/", middleware.AdminAuth(), controller.GetAllTask)
+		}
+
+		// Dashboard video playground — session-auth backed alias of /v1/videos.
+		// Lets the React VideoPlayground page submit jobs using the user's
+		// session cookie instead of a user-pasted API token.
+		videoPlaygroundRoute := apiRouter.Group("/v1")
+		videoPlaygroundRoute.Use(middleware.RouteTag("relay"))
+		videoPlaygroundRoute.Use(
+			middleware.UserAuth(),
+			middleware.PlaygroundUserToToken(),
+			middleware.Distribute(),
+		)
+		{
+			videoPlaygroundRoute.POST("/videos", controller.RelayTask)
+			videoPlaygroundRoute.GET("/videos/:task_id", controller.RelayTaskFetch)
 		}
 
 		vendorRoute := apiRouter.Group("/vendors")

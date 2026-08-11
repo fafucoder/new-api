@@ -86,6 +86,7 @@ import {
   Wallet,
   FileText,
   TrendingUp,
+  Film,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -131,6 +132,8 @@ export function getLucideIcon(key, selected = false) {
       return <LayoutDashboard {...commonProps} color={iconColor} />;
     case 'playground':
       return <TerminalSquare {...commonProps} color={iconColor} />;
+    case 'videoPlayground':
+      return <Film {...commonProps} color={iconColor} />;
     case 'chat':
       return <MessageSquare {...commonProps} color={iconColor} />;
     case 'token':
@@ -141,6 +144,8 @@ export function getLucideIcon(key, selected = false) {
       return <ImageIcon {...commonProps} color={iconColor} />;
     case 'task':
       return <CheckSquare {...commonProps} color={iconColor} />;
+    case 'assets':
+      return <Package {...commonProps} color={iconColor} />;
     case 'topup':
       return <CreditCard {...commonProps} color={iconColor} />;
     case 'channel':
@@ -423,6 +428,7 @@ export function getChannelIcon(channelType) {
     case 51: // 即梦 Jimeng
       return <Jimeng.Color size={iconSize} />;
     case 54: // 豆包视频 Doubao Video
+    case 58: // 火山引擎 Seedance
       return <Doubao.Color size={iconSize} />;
     case 56: // Replicate
       return <Replicate size={iconSize} />;

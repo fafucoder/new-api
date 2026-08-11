@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
@@ -44,6 +46,8 @@ func TestMain(m *testing.M) {
 		&model.Channel{},
 		&model.TopUp{},
 		&model.UserSubscription{},
+		&model.SubscriptionPlan{},
+		&model.SubscriptionPreConsumeRecord{},
 	); err != nil {
 		panic("failed to migrate: " + err.Error())
 	}
@@ -65,6 +69,8 @@ func truncate(t *testing.T) {
 		model.DB.Exec("DELETE FROM channels")
 		model.DB.Exec("DELETE FROM top_ups")
 		model.DB.Exec("DELETE FROM user_subscriptions")
+		model.DB.Exec("DELETE FROM subscription_plans")
+		model.DB.Exec("DELETE FROM subscription_pre_consume_records")
 	})
 }
 
@@ -429,6 +435,83 @@ func TestRecalculate_Subscription_NegativeDelta(t *testing.T) {
 	assert.Equal(t, model.LogTypeRefund, log.Type)
 }
 
+func TestRecalculateTaskQuotaByTokens_DynamicVideoSettlement(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, channelID = 15, 15
+	const totalTokens = 108900
+	exprString := `has(param("metadata.content.#.type"), "video_url") ? tier("video|720p|1|default", c * 46) : tier("video|720p|0|default", c * 10)`
+	groupRatio := 1.25
+	expectedQuota := billingexpr.QuotaRound(
+		float64(totalTokens) * 46 / 1_000_000 * common.QuotaPerUnit * groupRatio,
+	)
+
+	seedUser(t, userID, expectedQuota*2)
+	seedChannel(t, channelID)
+	task := makeTask(userID, channelID, expectedQuota, 0, BillingSourceWallet, 0)
+	task.TaskID = "task_dynamic_video"
+	task.Platform = constant.TaskPlatform("dynamic-video")
+	task.Properties.OriginModelName = "doubao-seedance-2-0-260128"
+	task.PrivateData.ResultURL = "https://example.com/generated.mp4"
+	task.PrivateData.BillingContext = &model.TaskBillingContext{
+		OriginModelName: task.Properties.OriginModelName,
+		GroupRatio:      groupRatio,
+		TieredBillingSnapshot: &billingexpr.BillingSnapshot{
+			BillingMode:   "tiered_expr",
+			ModelName:     task.Properties.OriginModelName,
+			ExprString:    exprString,
+			ExprHash:      billingexpr.ExprHashString(exprString),
+			GroupRatio:    groupRatio,
+			EstimatedTier: "video|720p|1|default",
+			QuotaPerUnit:  common.QuotaPerUnit,
+			ExprVersion:   billingexpr.DefaultExprVersion,
+		},
+		BillingRequestBody: json.RawMessage(`{"metadata":{"content":[{"type":"video_url","video_url":{"url":"https://example.com/reference.mp4"}}]}}`),
+	}
+	require.NoError(t, model.DB.Create(task).Error)
+
+	var persisted model.Task
+	require.NoError(t, model.DB.First(&persisted, task.ID).Error)
+	require.NotNil(t, persisted.PrivateData.BillingContext)
+	require.NotNil(t, persisted.PrivateData.BillingContext.TieredBillingSnapshot)
+	assert.JSONEq(t, string(task.PrivateData.BillingContext.BillingRequestBody), string(persisted.PrivateData.BillingContext.BillingRequestBody))
+
+	log := &model.Log{
+		UserId:           userID,
+		ChannelId:        channelID,
+		Type:             model.LogTypeConsume,
+		Content:          "task submitted",
+		ModelName:        task.Properties.OriginModelName,
+		Quota:            expectedQuota,
+		Other:            common.MapToJsonStr(map[string]interface{}{"is_task": true, "task_id": task.TaskID}),
+		CompletionTokens: 0,
+	}
+	require.NoError(t, model.LOG_DB.Create(log).Error)
+
+	RecalculateTaskQuotaByTokens(ctx, &persisted, totalTokens)
+
+	var updated model.Log
+	require.NoError(t, model.LOG_DB.First(&updated, log.Id).Error)
+	assert.Equal(t, totalTokens, updated.CompletionTokens)
+	assert.Equal(t, "Seedance completion settlement", updated.Content)
+
+	other, err := common.StrToMap(updated.Other)
+	require.NoError(t, err)
+	assert.Equal(t, "tiered_expr", other["billing_mode"])
+	assert.Equal(t, "video|720p|1|default", other["matched_tier"])
+	videoBilling, ok := other["video_billing"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "720p", videoBilling["resolution"])
+	assert.Equal(t, true, videoBilling["reference_video"])
+	assert.InDelta(t, totalTokens, videoBilling["tokens"], 0)
+	assert.InDelta(t, 46, videoBilling["unit_price_usd"], 1e-9)
+	assert.InDelta(t, 5.0094, videoBilling["amount_before_group_usd"], 1e-9)
+	assert.InDelta(t, 6.26175, videoBilling["final_amount_usd"], 1e-9)
+	assert.InDelta(t, expectedQuota, videoBilling["deducted_quota"], 0)
+	assert.Equal(t, "https://example.com/generated.mp4", videoBilling["video_url"])
+}
+
 // ===========================================================================
 // CAS + Billing integration tests
 // Simulates the flow in updateVideoSingleTask (service/task_polling.go)
@@ -713,4 +796,98 @@ func TestSettle_NonPerCall_AdaptorAdjustWorks(t *testing.T) {
 	log := getLastLog(t)
 	require.NotNil(t, log)
 	assert.Equal(t, model.LogTypeRefund, log.Type)
+}
+
+func TestSettle_DeferredBilling_ChargesWalletOnSuccess(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID = 33, 33, 33
+	const initQuota, actualQuota = 10000, 3000
+	const tokenRemain = 6000
+
+	seedUser(t, userID, initQuota)
+	seedToken(t, tokenID, userID, "sk-deferred-wallet", tokenRemain)
+	seedChannel(t, channelID)
+
+	task := makeTask(userID, channelID, 0, tokenID, "", 0)
+	task.PrivateData.BillingContext.DeferredBilling = true
+	task.PrivateData.BillingContext.EstimatedQuota = actualQuota
+	task.PrivateData.BillingContext.BillingPreference = "wallet_only"
+	require.NoError(t, model.DB.Create(task).Error)
+
+	settleTaskBillingOnComplete(
+		ctx,
+		&mockAdaptor{},
+		task,
+		&relaycommon.TaskInfo{Status: model.TaskStatusSuccess},
+	)
+
+	assert.Equal(t, initQuota-actualQuota, getUserQuota(t, userID))
+	assert.Equal(t, tokenRemain-actualQuota, getTokenRemainQuota(t, tokenID))
+	assert.Equal(t, actualQuota, task.Quota)
+	assert.Equal(t, BillingSourceWallet, task.PrivateData.BillingSource)
+
+	var persisted model.Task
+	require.NoError(t, model.DB.First(&persisted, task.ID).Error)
+	assert.Equal(t, actualQuota, persisted.Quota)
+	assert.Equal(t, BillingSourceWallet, persisted.PrivateData.BillingSource)
+}
+
+func TestSettle_DeferredBilling_ChargesSubscriptionOnSuccess(t *testing.T) {
+	truncate(t)
+	ctx := context.Background()
+
+	const userID, tokenID, channelID, subID, planID = 34, 34, 34, 34, 34
+	const initWalletQuota, actualQuota = 10000, 2500
+	const subTotal, subUsed int64 = 50000, 10000
+	const tokenRemain = 6000
+
+	seedUser(t, userID, initWalletQuota)
+	seedToken(t, tokenID, userID, "sk-deferred-subscription", tokenRemain)
+	seedChannel(t, channelID)
+	require.NoError(t, model.DB.Create(&model.SubscriptionPlan{
+		Id:               planID,
+		Title:            "deferred plan",
+		DurationUnit:     model.SubscriptionDurationMonth,
+		DurationValue:    1,
+		TotalAmount:      subTotal,
+		QuotaResetPeriod: model.SubscriptionResetNever,
+	}).Error)
+	require.NoError(t, model.DB.Create(&model.UserSubscription{
+		Id:          subID,
+		UserId:      userID,
+		PlanId:      planID,
+		AmountTotal: subTotal,
+		AmountUsed:  subUsed,
+		Status:      "active",
+		StartTime:   time.Now().Unix(),
+		EndTime:     time.Now().Add(30 * 24 * time.Hour).Unix(),
+	}).Error)
+
+	task := makeTask(userID, channelID, 0, tokenID, "", 0)
+	task.PrivateData.BillingContext.DeferredBilling = true
+	task.PrivateData.BillingContext.EstimatedQuota = actualQuota
+	task.PrivateData.BillingContext.BillingPreference = "subscription_only"
+	require.NoError(t, model.DB.Create(task).Error)
+
+	settleTaskBillingOnComplete(
+		ctx,
+		&mockAdaptor{},
+		task,
+		&relaycommon.TaskInfo{Status: model.TaskStatusSuccess},
+	)
+
+	assert.Equal(t, initWalletQuota, getUserQuota(t, userID))
+	assert.Equal(t, subUsed+int64(actualQuota), getSubscriptionUsed(t, subID))
+	assert.Equal(t, tokenRemain-actualQuota, getTokenRemainQuota(t, tokenID))
+	assert.Equal(t, actualQuota, task.Quota)
+	assert.Equal(t, BillingSourceSubscription, task.PrivateData.BillingSource)
+	assert.Equal(t, subID, task.PrivateData.SubscriptionId)
+
+	var persisted model.Task
+	require.NoError(t, model.DB.First(&persisted, task.ID).Error)
+	assert.Equal(t, actualQuota, persisted.Quota)
+	assert.Equal(t, BillingSourceSubscription, persisted.PrivateData.BillingSource)
+	assert.Equal(t, subID, persisted.PrivateData.SubscriptionId)
 }

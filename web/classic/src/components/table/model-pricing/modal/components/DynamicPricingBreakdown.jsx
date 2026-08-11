@@ -33,17 +33,29 @@ import {
   MATCH_CONTAINS,
   MATCH_EXISTS,
 } from '../../../../../pages/Setting/Ratio/components/requestRuleExpr';
+import {
+  compareVideoPricingRows,
+  parseVideoTierLabel,
+  tryParseVideoPricingConfig,
+} from '../../../../../pages/Setting/Ratio/components/videoPricing';
 
 const { Text } = Typography;
 
 const VAR_LABELS = { p: '输入', c: '输出' };
 const OP_LABELS = { '<': '<', '<=': '≤', '>': '>', '>=': '≥' };
-const TIME_FUNC_LABELS = { hour: '小时', minute: '分钟', weekday: '星期', month: '月份', day: '日期' };
+const TIME_FUNC_LABELS = {
+  hour: '小时',
+  minute: '分钟',
+  weekday: '星期',
+  month: '月份',
+  day: '日期',
+};
 
 function formatTokenHint(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n === 0) return '';
-  if (n >= 1000000) return `${(n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1)}M`;
+  if (n >= 1000000)
+    return `${(n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}K`;
   return String(n);
 }
@@ -62,7 +74,6 @@ function formatConditionSummary(conditions, t) {
     .join(' && ');
 }
 
-
 function describeCondition(cond, t) {
   if (cond.source === SOURCE_TIME) {
     const fn = t(TIME_FUNC_LABELS[cond.timeFunc] || cond.timeFunc);
@@ -76,7 +87,8 @@ function describeCondition(cond, t) {
   const src = cond.source === 'header' ? t('请求头') : t('请求参数');
   const path = cond.path || '';
   if (cond.mode === MATCH_EXISTS) return `${src} ${path} ${t('存在')}`;
-  if (cond.mode === MATCH_CONTAINS) return `${src} ${path} ${t('包含')} "${cond.value}"`;
+  if (cond.mode === MATCH_CONTAINS)
+    return `${src} ${path} ${t('包含')} "${cond.value}"`;
   const opMap = { eq: '=', gt: '>', gte: '≥', lt: '<', lte: '≤' };
   return `${src} ${path} ${opMap[cond.mode] || '='} ${cond.value}`;
 }
@@ -86,7 +98,13 @@ function describeGroup(group, t) {
   return parts.join(' && ');
 }
 
-export default function DynamicPricingBreakdown({ billingExpr, t }) {
+export default function DynamicPricingBreakdown({
+  billingExpr,
+  groupRatio = {},
+  usableGroup = {},
+  enableGroups = [],
+  t,
+}) {
   const { symbol, rate } = getCurrencyConfig();
   const { billingExpr: baseExpr, requestRuleExpr: ruleExpr } =
     splitBillingExprAndRequestRules(billingExpr || '');
@@ -96,6 +114,26 @@ export default function DynamicPricingBreakdown({ billingExpr, t }) {
 
   const hasTiers = tiers && tiers.length > 0;
   const hasRules = ruleGroups && ruleGroups.length > 0;
+  const videoConfig = tryParseVideoPricingConfig(baseExpr);
+  const videoPricingTiers = (tiers || [])
+    .flatMap((tier) => {
+      const videoTier = parseVideoTierLabel(tier.label);
+      if (!videoTier) return [];
+      return [{ tier, videoTier }];
+    })
+    .sort((left, right) =>
+      compareVideoPricingRows(
+        {
+          resolution: left.videoTier.resolution,
+          referenceVideo: left.videoTier.hasVideoInput,
+        },
+        {
+          resolution: right.videoTier.resolution,
+          referenceVideo: right.videoTier.hasVideoInput,
+        },
+      ),
+    );
+  const isVideoPricing = Boolean(videoConfig && videoPricingTiers.length > 0);
 
   if (!hasTiers && !hasRules) {
     return (
@@ -107,44 +145,130 @@ export default function DynamicPricingBreakdown({ billingExpr, t }) {
           <Text className='text-lg font-medium'>{t('动态计费')}</Text>
         </div>
         <div className='text-sm text-gray-500'>
-          <code style={{ fontSize: 12, wordBreak: 'break-all' }}>{billingExpr}</code>
+          <code style={{ fontSize: 12, wordBreak: 'break-all' }}>
+            {billingExpr}
+          </code>
         </div>
       </div>
     );
   }
 
   const priceFields = BILLING_PRICING_VARS.map((v) => [v.field, v.shortLabel]);
+  const availableGroups = Object.keys(usableGroup)
+    .filter((group) => group !== '' && group !== 'auto')
+    .filter((group) => enableGroups.includes(group));
 
-  const tierColumns = [
-    {
-      title: t('档位'),
-      dataIndex: 'label',
-      render: (text, record) => (
-        <div>
-          <Tag color='blue' size='small'>{text || t('默认')}</Tag>
-          {record.condSummary && (
-            <div className='text-xs text-gray-500 mt-1'>{record.condSummary}</div>
-          )}
-        </div>
-      ),
-    },
-    ...priceFields
-      .filter(([field]) => hasTiers && tiers.some((tier) => tier[field] > 0))
-      .map(([field, label]) => ({
-        title: `${t(label)} (${symbol}/1M tokens)`,
-        dataIndex: field,
-        render: (v) => v > 0 ? <Text strong>{`${symbol}${(v * rate).toFixed(4)}`}</Text> : '-',
-      })),
-  ];
+  const tierColumns = isVideoPricing
+    ? [
+        {
+          title: t('分组'),
+          dataIndex: 'group',
+          width: 120,
+          render: (group, record) => ({
+            children: (
+              <Tag color='white' size='small' shape='circle'>
+                {group}
+                {t('分组')}
+              </Tag>
+            ),
+            props: {
+              rowSpan: record.groupRowIndex === 0 ? record.groupRowSpan : 0,
+            },
+          }),
+        },
+        {
+          title: t('档位'),
+          dataIndex: 'label',
+          width: 110,
+          render: (text, record) => (
+            <Tag color='blue' size='small'>
+              {record.videoTier?.resolution || text || '-'}
+            </Tag>
+          ),
+        },
+        {
+          title: t('视频输入'),
+          dataIndex: 'videoInput',
+          width: 140,
+          render: (_, record) =>
+            record.videoTier?.hasVideoInput ? (
+              <Tag color='yellow' size='small' shape='circle'>
+                {t('是')}
+              </Tag>
+            ) : (
+              <Tag color='grey' size='small' shape='circle'>
+                {t('否')}
+              </Tag>
+            ),
+        },
+        {
+          title: t('价格'),
+          dataIndex: 'price',
+          width: 150,
+          render: (price) =>
+            Number.isFinite(price) ? (
+              <Text strong>{`${symbol}${price.toFixed(4)}`}</Text>
+            ) : (
+              '-'
+            ),
+        },
+      ]
+    : [
+        {
+          title: t('档位'),
+          dataIndex: 'label',
+          render: (text, record) => (
+            <div>
+              <Tag color='blue' size='small'>
+                {text || t('默认')}
+              </Tag>
+              {record.condSummary && (
+                <div className='text-xs text-gray-500 mt-1'>
+                  {record.condSummary}
+                </div>
+              )}
+            </div>
+          ),
+        },
+        ...priceFields
+          .filter(
+            ([field]) => hasTiers && tiers.some((tier) => tier[field] > 0),
+          )
+          .map(([field, label]) => ({
+            title: `${t(label)} (${symbol}/1M tokens)`,
+            dataIndex: field,
+            render: (value) =>
+              value > 0 ? (
+                <Text strong>{`${symbol}${(value * rate).toFixed(4)}`}</Text>
+              ) : (
+                '-'
+              ),
+          })),
+      ];
 
-  const tierData = hasTiers
-    ? tiers.map((tier, i) => ({
-        key: `tier-${i}`,
-        label: tier.label,
-        condSummary: formatConditionSummary(tier.conditions, t),
-        ...Object.fromEntries(priceFields.map(([field]) => [field, tier[field] || 0])),
-      }))
-    : [];
+  const tierData = isVideoPricing
+    ? availableGroups.flatMap((group) => {
+        const ratio = groupRatio[group] ?? 1;
+        return videoPricingTiers.map(({ tier, videoTier }, index) => ({
+          key: `${group}-tier-${index}`,
+          group,
+          groupRowIndex: index,
+          groupRowSpan: videoPricingTiers.length,
+          label: tier.label,
+          videoTier,
+          price: Number(tier.outputPrice || 0) * ratio * rate,
+        }));
+      })
+    : hasTiers
+      ? tiers.map((tier, index) => ({
+          key: `tier-${index}`,
+          label: tier.label,
+          condSummary: formatConditionSummary(tier.conditions, t),
+          ...Object.fromEntries(
+            priceFields.map(([field]) => [field, tier[field] || 0]),
+          ),
+        }))
+      : [];
 
   return (
     <div>
@@ -162,7 +286,11 @@ export default function DynamicPricingBreakdown({ billingExpr, t }) {
 
       {hasTiers && (
         <div style={{ marginBottom: 16 }}>
-          <Text strong className='text-sm' style={{ display: 'block', marginBottom: 8 }}>
+          <Text
+            strong
+            className='text-sm'
+            style={{ display: 'block', marginBottom: 8 }}
+          >
             {t('分档价格表')}
           </Text>
           <Table
@@ -171,14 +299,28 @@ export default function DynamicPricingBreakdown({ billingExpr, t }) {
             pagination={false}
             size='small'
             bordered={false}
+            scroll={isVideoPricing ? { x: 520 } : undefined}
             className='!rounded-lg'
           />
+          {isVideoPricing && (
+            <Text
+              type='tertiary'
+              size='small'
+              style={{ display: 'block', marginTop: 8 }}
+            >
+              {t('计价单位')}: {symbol} / 1M Tokens
+            </Text>
+          )}
         </div>
       )}
 
       {hasRules && (
         <div style={{ marginBottom: 16 }}>
-          <Text strong className='text-sm' style={{ display: 'block', marginBottom: 8 }}>
+          <Text
+            strong
+            className='text-sm'
+            style={{ display: 'block', marginBottom: 8 }}
+          >
             {t('条件乘数')}
           </Text>
           {ruleGroups.map((group, gi) => (
@@ -195,12 +337,13 @@ export default function DynamicPricingBreakdown({ billingExpr, t }) {
               }}
             >
               <Text size='small'>{describeGroup(group, t)}</Text>
-              <Tag color='orange' size='small'>{group.multiplier}x</Tag>
+              <Tag color='orange' size='small'>
+                {group.multiplier}x
+              </Tag>
             </div>
           ))}
         </div>
       )}
-
     </div>
   );
 }

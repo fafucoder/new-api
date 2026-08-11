@@ -88,7 +88,7 @@ export function createTimestampColumn<T>(config: {
         return <span className='text-muted-foreground/60 text-xs'>-</span>
       }
       return (
-        <span className='font-mono text-xs tabular-nums'>
+        <span className='font-mono text-xs whitespace-nowrap tabular-nums'>
           {formatTimestampToDate(timestamp, unit)}
         </span>
       )
@@ -213,7 +213,7 @@ export function createChannelColumn<T>(config: {
           autoColor={String(channelId)}
           copyText={String(channelId)}
           size='sm'
-          className='font-mono'
+          className='shrink-0 font-mono whitespace-nowrap'
         />
       )
     },

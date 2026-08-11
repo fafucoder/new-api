@@ -267,8 +267,8 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
         const config = getLogTypeConfig(log.type)
 
         return (
-          <div className='flex flex-col gap-0.5'>
-            <span className='font-mono text-xs tabular-nums'>
+          <div className='inline-flex flex-nowrap items-center gap-2 whitespace-nowrap'>
+            <span className='shrink-0 font-mono text-xs whitespace-nowrap tabular-nums'>
               {formatTimestampToDate(timestamp)}
             </span>
             <StatusBadge
@@ -321,10 +321,10 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
               <Tooltip>
                 <TooltipTrigger
                   render={
-                    <div className='flex max-w-[160px] flex-col gap-0.5' />
+                    <div className='inline-flex max-w-[220px] min-w-0 flex-nowrap items-center gap-1.5 whitespace-nowrap' />
                   }
                 >
-                  <div className='relative inline-flex w-fit'>
+                  <div className='relative inline-flex w-fit shrink-0'>
                     <StatusBadge
                       label={channelIdDisplay}
                       autoColor={String(log.channel)}
@@ -355,7 +355,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                     )}
                   </div>
                   {log.channel_name && (
-                    <span className='text-muted-foreground/70 truncate text-[11px]'>
+                    <span className='text-muted-foreground/70 min-w-0 truncate text-[11px] whitespace-nowrap'>
                       {channelName}
                     </span>
                   )}
@@ -409,14 +409,14 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
           return (
             <button
               type='button'
-              className='flex items-center gap-1.5 text-left'
+              className='inline-flex w-full min-w-0 flex-nowrap items-center gap-1.5 text-left'
               onClick={(e) => {
                 e.stopPropagation()
                 setSelectedUserId(log.user_id)
                 setUserInfoDialogOpen(true)
               }}
             >
-              <Avatar className='ring-border/60 size-6 ring-1'>
+              <Avatar className='ring-border/60 size-6 shrink-0 ring-1'>
                 <AvatarFallback
                   className={cn(
                     'text-[11px] font-semibold',
@@ -431,7 +431,7 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
                   {sensitiveVisible ? getUserAvatarFallback(log.username) : '•'}
                 </AvatarFallback>
               </Avatar>
-              <span className='text-muted-foreground truncate text-sm hover:underline'>
+              <span className='text-muted-foreground min-w-0 truncate text-sm whitespace-nowrap hover:underline'>
                 {sensitiveVisible ? log.username : '••••'}
               </span>
             </button>

@@ -48,6 +48,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     log: true,
     midjourney: true,
     task: true,
+    assets: true,
   },
   personal: {
     enabled: true,
@@ -104,6 +105,7 @@ const URL_TO_CONFIG_MAP: Record<string, { section: string; module: string }> = {
   '/usage-logs/common': { section: 'console', module: 'log' },
   '/usage-logs/drawing': { section: 'console', module: 'midjourney' },
   '/usage-logs/task': { section: 'console', module: 'task' },
+  '/assets': { section: 'console', module: 'assets' },
   '/wallet': { section: 'personal', module: 'topup' },
   '/profile': { section: 'personal', module: 'personal' },
   '/channels': { section: 'admin', module: 'channel' },
@@ -300,10 +302,17 @@ export function useSidebarConfig(navGroups: NavGroup[]): NavGroup[] {
       navGroups
         .map((group) => ({
           ...group,
-          items: filterNavItems(group.items, adminConfig, userConfig),
+          items: filterNavItems(group.items, adminConfig, userConfig).filter(
+            (item) =>
+              !(
+                'url' in item &&
+                item.url === '/assets' &&
+                status?.asset_library_enabled !== true
+              )
+          ),
         }))
         .filter((group) => group.items.length > 0), // Only show navigation groups with visible items
-    [navGroups, adminConfig, userConfig]
+    [navGroups, adminConfig, userConfig, status?.asset_library_enabled]
   )
 
   return filteredNavGroups

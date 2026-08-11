@@ -29,6 +29,7 @@ export const DEFAULT_ADMIN_CONFIG = {
   chat: {
     enabled: true,
     playground: true,
+    videoPlayground: true,
     chat: true,
   },
   console: {
@@ -38,6 +39,7 @@ export const DEFAULT_ADMIN_CONFIG = {
     log: true,
     midjourney: true,
     task: true,
+    assets: true,
     status: true,
     modelStatus: true,
     channelValidation: true,

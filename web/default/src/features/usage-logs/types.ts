@@ -91,6 +91,19 @@ export interface ChannelAffinityInfo {
   using_group?: string
 }
 
+export interface VideoBillingInfo {
+  resolution?: string
+  reference_video?: boolean
+  tokens?: number
+  unit_price_usd?: number
+  amount_before_group_usd?: number
+  group_ratio?: number
+  final_amount_usd?: number
+  deducted_quota?: number
+  deducted_amount_usd?: number
+  video_url?: string
+}
+
 export interface LogOtherData {
   admin_info?: {
     is_multi_key?: boolean
@@ -142,6 +155,7 @@ export interface LogOtherData {
   billing_mode?: string
   expr_b64?: string
   matched_tier?: string
+  video_billing?: VideoBillingInfo
   reasoning_effort?: string
   image?: boolean
   image_ratio?: number

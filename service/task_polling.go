@@ -542,7 +542,8 @@ func truncateBase64(s string) string {
 //  3. 都不满足 → 保持预扣额度不变
 func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor, task *model.Task, taskResult *relaycommon.TaskInfo) {
 	// 0. 按次计费的任务不做差额结算
-	if bc := task.PrivateData.BillingContext; bc != nil && bc.PerCallBilling {
+	bc := task.PrivateData.BillingContext
+	if bc != nil && bc.PerCallBilling && !bc.DeferredBilling {
 		logger.LogInfo(ctx, fmt.Sprintf("任务 %s 按次计费，跳过差额结算", task.TaskID))
 		return
 	}
@@ -556,5 +557,9 @@ func settleTaskBillingOnComplete(ctx context.Context, adaptor TaskPollingAdaptor
 		RecalculateTaskQuotaByTokens(ctx, task, taskResult.TotalTokens)
 		return
 	}
-	// 3. 无调整，保持预扣额度
+	// 3. 延迟计费任务没有实际用量时，按提交阶段冻结的预计额度扣费。
+	if bc != nil && bc.DeferredBilling && bc.EstimatedQuota > 0 {
+		RecalculateTaskQuota(ctx, task, bc.EstimatedQuota, "视频任务完成后扣费")
+	}
+	// 4. 非延迟计费任务无调整时，保持预扣额度。
 }

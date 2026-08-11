@@ -52,6 +52,7 @@ const OperationSetting = () => {
     DefaultCollapseSidebar: false,
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
+    LandingPageEnabled: false,
 
     /* 顶栏模块管理 */
     HeaderNavModules: '',

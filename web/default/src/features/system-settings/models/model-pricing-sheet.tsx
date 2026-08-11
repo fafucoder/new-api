@@ -65,6 +65,11 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { combineBillingExpr } from '@/features/pricing/lib/billing-expr'
+import {
+  createDefaultVideoPricingConfig,
+  generateVideoPricingExpr,
+  tryParseVideoPricingConfig,
+} from '@/features/pricing/lib/video-pricing'
 import { TieredPricingEditor } from './tiered-pricing-editor'
 
 const createModelPricingSchema = (t: (key: string) => string) =>
@@ -84,7 +89,8 @@ type ModelPricingFormValues = z.infer<
   ReturnType<typeof createModelPricingSchema>
 >
 
-type PricingMode = 'per-token' | 'per-request' | 'tiered_expr'
+type StoredPricingMode = 'per-token' | 'per-request' | 'tiered_expr'
+type PricingMode = StoredPricingMode | 'video'
 type LaneKey =
   | 'completion'
   | 'cache'
@@ -103,7 +109,7 @@ export type ModelRatioData = {
   imageRatio?: string
   audioRatio?: string
   audioCompletionRatio?: string
-  billingMode?: PricingMode
+  billingMode?: StoredPricingMode
   billingExpr?: string
   requestRuleExpr?: string
 }
@@ -275,6 +281,7 @@ function createInitialLaneState(data?: ModelRatioData | null) {
 
 function getModeLabel(mode: PricingMode) {
   if (mode === 'per-request') return 'Per-request'
+  if (mode === 'video') return 'Video pricing'
   if (mode === 'tiered_expr') return 'Expression'
   return 'Per-token'
 }
@@ -283,6 +290,7 @@ function getModeBadgeVariant(
   mode: PricingMode
 ): 'default' | 'secondary' | 'outline' {
   if (mode === 'per-request') return 'secondary'
+  if (mode === 'video') return 'default'
   if (mode === 'tiered_expr') return 'default'
   return 'outline'
 }
@@ -297,10 +305,19 @@ function buildPreviewRows(
   laneEnabled: Record<LaneKey, boolean>,
   t: (key: string) => string
 ): PreviewRow[] {
-  if (mode === 'tiered_expr') {
+  if (mode === 'tiered_expr' || mode === 'video') {
     const effectiveExpr = combineBillingExpr(billingExpr, requestRuleExpr)
     return [
       { key: 'mode', label: 'BillingMode', value: 'tiered_expr' },
+      ...(mode === 'video'
+        ? [
+            {
+              key: 'pricingType',
+              label: t('Pricing Type'),
+              value: t('Video pricing'),
+            },
+          ]
+        : []),
       {
         key: 'expr',
         label: t('Expression'),
@@ -464,7 +481,9 @@ export function ModelPricingEditorPanel({
       })
       setPricingMode(
         editData.billingMode === 'tiered_expr'
-          ? 'tiered_expr'
+          ? tryParseVideoPricingConfig(editData.billingExpr)
+            ? 'video'
+            : 'tiered_expr'
           : editData.price
             ? 'per-request'
             : 'per-token'
@@ -609,7 +628,20 @@ export function ModelPricingEditorPanel({
   const handleModeChange = (value: string) => {
     const nextMode = value as PricingMode
     setPricingMode(nextMode)
-    if (nextMode === 'tiered_expr' && !billingExpr) {
+    if (nextMode === 'video') {
+      if (!tryParseVideoPricingConfig(billingExpr)) {
+        setBillingExpr(
+          generateVideoPricingExpr(createDefaultVideoPricingConfig())
+        )
+      }
+      setRequestRuleExpr('')
+    } else if (
+      nextMode === 'tiered_expr' &&
+      tryParseVideoPricingConfig(billingExpr)
+    ) {
+      setBillingExpr('tier("base", p * 0 + c * 0)')
+      setRequestRuleExpr('')
+    } else if (nextMode === 'tiered_expr' && !billingExpr) {
       setBillingExpr('tier("base", p * 0 + c * 0)')
     }
   }
@@ -711,7 +743,7 @@ export function ModelPricingEditorPanel({
 
     const data: ModelRatioData = {
       name: values.name.trim(),
-      billingMode: pricingMode,
+      billingMode: pricingMode === 'video' ? 'tiered_expr' : pricingMode,
       price: values.price || '',
       ratio: values.ratio || '',
       cacheRatio: values.cacheRatio || '',
@@ -722,7 +754,7 @@ export function ModelPricingEditorPanel({
       audioCompletionRatio: values.audioCompletionRatio || '',
     }
 
-    if (pricingMode === 'tiered_expr') {
+    if (pricingMode === 'tiered_expr' || pricingMode === 'video') {
       data.billingExpr = billingExpr
       data.requestRuleExpr = requestRuleExpr
     }
@@ -800,7 +832,7 @@ export function ModelPricingEditorPanel({
               />
 
               <Tabs value={pricingMode} onValueChange={handleModeChange}>
-                <TabsList className='grid w-full grid-cols-3'>
+                <TabsList className='grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4'>
                   <TabsTrigger value='per-token'>{t('Per-token')}</TabsTrigger>
                   <TabsTrigger value='per-request'>
                     {t('Per-request')}
@@ -808,6 +840,7 @@ export function ModelPricingEditorPanel({
                   <TabsTrigger value='tiered_expr'>
                     {t('Expression')}
                   </TabsTrigger>
+                  <TabsTrigger value='video'>{t('Video pricing')}</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value='per-token' className='flex flex-col gap-5'>
@@ -897,6 +930,17 @@ export function ModelPricingEditorPanel({
                   className='flex flex-col gap-5'
                 >
                   <TieredPricingEditor
+                    modelName={watchedValues.name}
+                    billingExpr={billingExpr}
+                    requestRuleExpr={requestRuleExpr}
+                    onBillingExprChange={setBillingExpr}
+                    onRequestRuleExprChange={setRequestRuleExpr}
+                  />
+                </TabsContent>
+
+                <TabsContent value='video' className='flex flex-col gap-5'>
+                  <TieredPricingEditor
+                    mode='video'
                     modelName={watchedValues.name}
                     billingExpr={billingExpr}
                     requestRuleExpr={requestRuleExpr}

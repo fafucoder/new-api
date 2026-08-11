@@ -27,6 +27,7 @@ import ModelBasicInfo from './components/ModelBasicInfo';
 import ModelEndpoints from './components/ModelEndpoints';
 import ModelPricingTable from './components/ModelPricingTable';
 import DynamicPricingBreakdown from './components/DynamicPricingBreakdown';
+import { tryParseVideoPricingConfig } from '../../../../pages/Setting/Ratio/components/videoPricing';
 
 const { Text } = Typography;
 
@@ -47,6 +48,9 @@ const ModelDetailSideSheet = ({
   t,
 }) => {
   const isMobile = useIsMobile();
+  const isVideoPricing = Boolean(
+    tryParseVideoPricingConfig(modelData?.billing_expr),
+  );
 
   return (
     <SideSheet
@@ -95,32 +99,40 @@ const ModelDetailSideSheet = ({
                 t={t}
               />
             </div>
-            {modelData.billing_mode === 'tiered_expr' && modelData.billing_expr && (
+            {modelData.billing_mode === 'tiered_expr' &&
+              modelData.billing_expr && (
+                <>
+                  <Divider margin={16} />
+                  <div style={{ padding: '0 24px' }}>
+                    <DynamicPricingBreakdown
+                      billingExpr={modelData.billing_expr}
+                      groupRatio={groupRatio}
+                      usableGroup={usableGroup}
+                      enableGroups={modelData.enable_groups || []}
+                      t={t}
+                    />
+                  </div>
+                </>
+              )}
+            {!isVideoPricing && (
               <>
                 <Divider margin={16} />
                 <div style={{ padding: '0 24px' }}>
-                  <DynamicPricingBreakdown
-                    billingExpr={modelData.billing_expr}
+                  <ModelPricingTable
+                    modelData={modelData}
+                    groupRatio={groupRatio}
+                    currency={currency}
+                    siteDisplayType={siteDisplayType}
+                    tokenUnit={tokenUnit}
+                    displayPrice={displayPrice}
+                    showRatio={showRatio}
+                    usableGroup={usableGroup}
+                    autoGroups={autoGroups}
                     t={t}
                   />
                 </div>
               </>
             )}
-            <Divider margin={16} />
-            <div style={{ padding: '0 24px' }}>
-              <ModelPricingTable
-                modelData={modelData}
-                groupRatio={groupRatio}
-                currency={currency}
-                siteDisplayType={siteDisplayType}
-                tokenUnit={tokenUnit}
-                displayPrice={displayPrice}
-                showRatio={showRatio}
-                usableGroup={usableGroup}
-                autoGroups={autoGroups}
-                t={t}
-              />
-            </div>
             <Divider margin={16} />
           </>
         )}

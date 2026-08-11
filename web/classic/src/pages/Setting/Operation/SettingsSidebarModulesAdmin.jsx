@@ -43,6 +43,7 @@ export default function SettingsSidebarModulesAdmin(props) {
     chat: {
       enabled: true,
       playground: true,
+      videoPlayground: true,
       chat: true,
     },
     console: {
@@ -112,6 +113,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       chat: {
         enabled: true,
         playground: true,
+        videoPlayground: true,
         chat: true,
       },
       console: {
@@ -187,6 +189,9 @@ export default function SettingsSidebarModulesAdmin(props) {
       try {
         const modules = JSON.parse(props.options.SidebarModulesAdmin);
         // 规范化配置，确保新添加的模块有默认值
+        if (modules.chat && modules.chat.videoPlayground === undefined) {
+          modules.chat.videoPlayground = true;
+        }
         if (modules.console && modules.console.status === undefined) {
           modules.console.status = true;
         }
@@ -215,7 +220,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       } catch (error) {
         // 使用默认配置
         const defaultModules = {
-          chat: { enabled: true, playground: true, chat: true },
+          chat: { enabled: true, playground: true, videoPlayground: true, chat: true },
           console: {
             enabled: true,
             detail: true,
@@ -259,6 +264,11 @@ export default function SettingsSidebarModulesAdmin(props) {
           key: 'playground',
           title: t('操练场'),
           description: t('AI模型测试环境'),
+        },
+        {
+          key: 'videoPlayground',
+          title: t('视频生成'),
+          description: t('AI 视频生成'),
         },
         { key: 'chat', title: t('聊天'), description: t('聊天会话管理') },
       ],

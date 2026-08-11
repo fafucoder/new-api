@@ -57,6 +57,9 @@ export default function GeneralSettings(props) {
     DefaultCollapseSidebar: false,
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
+    LandingPageEnabled: false,
+    AssetLibraryEnabled: false,
+    VideoTaskPreConsumeEnabled: true,
     'token_setting.max_user_tokens': 1000,
   });
   const refForm = useRef();
@@ -282,12 +285,8 @@ export default function GeneralSettings(props) {
                     'general_setting.quota_display_type',
                   )}
                 >
-                  <Form.Select.Option value='USD'>
-                    USD ($)
-                  </Form.Select.Option>
-                  <Form.Select.Option value='CNY'>
-                    CNY (¥)
-                  </Form.Select.Option>
+                  <Form.Select.Option value='USD'>USD ($)</Form.Select.Option>
+                  <Form.Select.Option value='CNY'>CNY (¥)</Form.Select.Option>
                   {showTokensOption && (
                     <Form.Select.Option value='TOKENS'>
                       Tokens
@@ -390,6 +389,43 @@ export default function GeneralSettings(props) {
                   onChange={handleFieldChange('SelfUseModeEnabled')}
                 />
               </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'LandingPageEnabled'}
+                  label={t('启用 Landing 首页')}
+                  extraText={t(
+                    '开启后,根路径 / 渲染 Landing 页;关闭则展示默认首页 Banner',
+                  )}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={handleFieldChange('LandingPageEnabled')}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'AssetLibraryEnabled'}
+                  label={t('素材库')}
+                  extraText={t('控制是否向用户展示素材库')}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={handleFieldChange('AssetLibraryEnabled')}
+                />
+              </Col>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.Switch
+                  field={'VideoTaskPreConsumeEnabled'}
+                  label={t('视频生成预扣费')}
+                  extraText={t(
+                    '开启后提交前预扣，关闭后仅在视频生成成功后扣费',
+                  )}
+                  size='default'
+                  checkedText='｜'
+                  uncheckedText='〇'
+                  onChange={handleFieldChange('VideoTaskPreConsumeEnabled')}
+                />
+              </Col>
             </Row>
             <Row gutter={16}>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
@@ -398,7 +434,9 @@ export default function GeneralSettings(props) {
                   field={'token_setting.max_user_tokens'}
                   step={1}
                   min={1}
-                  extraText={t('每个用户最多可创建的令牌数量，默认 1000，设置过大可能会影响性能')}
+                  extraText={t(
+                    '每个用户最多可创建的令牌数量，默认 1000，设置过大可能会影响性能',
+                  )}
                   placeholder={'1000'}
                   onChange={handleFieldChange('token_setting.max_user_tokens')}
                 />

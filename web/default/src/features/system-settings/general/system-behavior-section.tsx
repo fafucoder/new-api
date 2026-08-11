@@ -41,6 +41,8 @@ const behaviorSchema = z.object({
   DefaultCollapseSidebar: z.boolean(),
   DemoSiteEnabled: z.boolean(),
   SelfUseModeEnabled: z.boolean(),
+  AssetLibraryEnabled: z.boolean(),
+  VideoTaskPreConsumeEnabled: z.boolean(),
 })
 
 type BehaviorFormValues = z.infer<typeof behaviorSchema>
@@ -162,6 +164,54 @@ export function SystemBehaviorSection({
                   </FormLabel>
                   <FormDescription>
                     {t('Optimize system for self-hosted single-user usage')}
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='AssetLibraryEnabled'
+            render={({ field }) => (
+              <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                <div className='space-y-0.5'>
+                  <FormLabel className='text-base'>
+                    {t('Asset Library')}
+                  </FormLabel>
+                  <FormDescription>
+                    {t('Show the asset library to users')}
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name='VideoTaskPreConsumeEnabled'
+            render={({ field }) => (
+              <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                <div className='space-y-0.5'>
+                  <FormLabel className='text-base'>
+                    {t('Video generation pre-consumption')}
+                  </FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Pre-charge video generation tasks before submission; when disabled, charge only after successful generation'
+                    )}
                   </FormDescription>
                 </div>
                 <FormControl>

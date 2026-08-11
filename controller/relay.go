@@ -778,25 +778,50 @@ func RelayTask(c *gin.Context) {
 
 	// ── 成功：结算 + 日志 + 插入任务 ──
 	if taskErr == nil {
-		if settleErr := service.SettleBilling(c, relayInfo, result.Quota); settleErr != nil {
+		initialQuota := result.Quota
+		if result.DeferredBilling {
+			initialQuota = 0
+		} else if settleErr := service.SettleBilling(c, relayInfo, result.Quota); settleErr != nil {
 			common.SysError("settle task billing error: " + settleErr.Error())
 		}
-		service.LogTaskConsumption(c, relayInfo)
+		service.LogTaskConsumption(c, relayInfo, initialQuota)
 
 		task := model.InitTask(result.Platform, relayInfo)
+		// 记录用户提示词到 Properties.Input —— 前端历史列表用它显示原始提问。
+		if taskReq, taskReqErr := relaycommon.GetTaskRequest(c); taskReqErr == nil {
+			task.Properties.Input = taskReq.Prompt
+		}
 		task.PrivateData.UpstreamTaskID = result.UpstreamTaskID
+		// 通用扩展点：adaptor 可在 BuildRequestBody 阶段通过 c.Set("task_request_snapshot", []byte{...})
+		// 将请求参数快照写入 task.PrivateData.RequestSnapshot，供轮询/结算阶段使用。
+		// 其他 channel 不设置时此字段为 nil，无副作用。
+		if snap, exists := c.Get("task_request_snapshot"); exists {
+			if b, ok := snap.([]byte); ok && len(b) > 0 {
+				task.PrivateData.RequestSnapshot = b
+			}
+		}
 		task.PrivateData.BillingSource = relayInfo.BillingSource
 		task.PrivateData.SubscriptionId = relayInfo.SubscriptionId
 		task.PrivateData.TokenId = relayInfo.TokenId
 		task.PrivateData.BillingContext = &model.TaskBillingContext{
-			ModelPrice:      relayInfo.PriceData.ModelPrice,
-			GroupRatio:      relayInfo.PriceData.GroupRatioInfo.GroupRatio,
-			ModelRatio:      relayInfo.PriceData.ModelRatio,
-			OtherRatios:     relayInfo.PriceData.OtherRatios,
-			OriginModelName: relayInfo.OriginModelName,
-			PerCallBilling:  common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice,
+			ModelPrice:            relayInfo.PriceData.ModelPrice,
+			GroupRatio:            relayInfo.PriceData.GroupRatioInfo.GroupRatio,
+			ModelRatio:            relayInfo.PriceData.ModelRatio,
+			OtherRatios:           relayInfo.PriceData.OtherRatios,
+			OriginModelName:       relayInfo.OriginModelName,
+			PerCallBilling:        relayInfo.TieredBillingSnapshot == nil && (common.StringsContains(constant.TaskPricePatches, relayInfo.OriginModelName) || relayInfo.PriceData.UsePrice),
+			DeferredBilling:       result.DeferredBilling,
+			EstimatedQuota:        result.Quota,
+			BillingPreference:     common.NormalizeBillingPreference(relayInfo.UserSetting.BillingPreference),
+			TieredBillingSnapshot: relayInfo.TieredBillingSnapshot,
 		}
-		task.Quota = result.Quota
+		if relayInfo.BillingRequestInput != nil && len(relayInfo.BillingRequestInput.Body) > 0 {
+			task.PrivateData.BillingContext.BillingRequestBody = append(
+				task.PrivateData.BillingContext.BillingRequestBody,
+				relayInfo.BillingRequestInput.Body...,
+			)
+		}
+		task.Quota = initialQuota
 		task.Data = result.TaskData
 		task.Action = relayInfo.Action
 		if insertErr := task.Insert(); insertErr != nil {

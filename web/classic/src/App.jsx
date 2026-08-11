@@ -44,6 +44,8 @@ import Task from './pages/Task';
 import ModelPage from './pages/Model';
 import ModelDeploymentPage from './pages/ModelDeployment';
 import Playground from './pages/Playground';
+import VideoPlayground from './pages/VideoPlayground';
+import AssetLibrary from './pages/AssetLibrary';
 import Subscription from './pages/Subscription';
 import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
@@ -51,6 +53,7 @@ import Setup from './pages/Setup';
 import SetupCheck from './components/layout/SetupCheck';
 
 const Home = lazy(() => import('./pages/Home'));
+const Landing = lazy(() => import('./pages/Landing'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const About = lazy(() => import('./pages/About'));
 const Tutorial = lazy(() => import('./pages/Tutorial'));
@@ -108,6 +111,14 @@ function App() {
           }
         />
         <Route
+          path='/landing'
+          element={
+            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+              <Landing />
+            </Suspense>
+          }
+        />
+        <Route
           path='/setup'
           element={
             <Suspense fallback={<Loading></Loading>} key={location.pathname}>
@@ -161,6 +172,22 @@ function App() {
           element={
             <PrivateRoute>
               <Playground />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/video-playground'
+          element={
+            <PrivateRoute>
+              <VideoPlayground />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/assets'
+          element={
+            <PrivateRoute>
+              <AssetLibrary />
             </PrivateRoute>
           }
         />
