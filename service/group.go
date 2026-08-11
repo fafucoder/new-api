@@ -42,32 +42,6 @@ func GetUserUsableGroups(userGroup string) map[string]string {
 	return groupsCopy
 }
 
-// GetUserSelectableGroups 获取用户令牌创建时可选的分组，不包含兜底逻辑
-func GetUserSelectableGroups(userGroup string) map[string]string {
-	groupsCopy := setting.GetUserUsableGroupsCopy()
-	typeMap := ratio_setting.GetGroupTypeCopy()
-	for name := range groupsCopy {
-		if typeMap[name] == "user" {
-			delete(groupsCopy, name)
-		}
-	}
-	if userGroup != "" {
-		specialSettings, b := ratio_setting.GetGroupRatioSetting().GroupSpecialUsableGroup.Get(userGroup)
-		if b {
-			for specialGroup, desc := range specialSettings {
-				if strings.HasPrefix(specialGroup, "-:") {
-					delete(groupsCopy, strings.TrimPrefix(specialGroup, "-:"))
-				} else if strings.HasPrefix(specialGroup, "+:") {
-					groupsCopy[strings.TrimPrefix(specialGroup, "+:")] = desc
-				} else {
-					groupsCopy[specialGroup] = desc
-				}
-			}
-		}
-	}
-	return groupsCopy
-}
-
 func GroupInUserUsableGroups(userGroup, groupName string) bool {
 	_, ok := GetUserUsableGroups(userGroup)[groupName]
 	return ok

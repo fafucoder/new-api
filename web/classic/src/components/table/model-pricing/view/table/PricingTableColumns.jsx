@@ -251,5 +251,9 @@ export const getPricingTableColumns = ({
 
   const columns = [...baseColumns];
   columns.push(endpointColumn);
+  if (showRatio) {
+    columns.push(ratioColumn);
+  }
+  columns.push(priceColumn);
   return columns;
 };
