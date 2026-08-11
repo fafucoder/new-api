@@ -301,14 +301,46 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 // other LIKE '%"task_id":"<taskID>"%' 精确匹配（GORM 的 LIKE 在 SQLite/MySQL/PostgreSQL 上都通用）。
 // 返回受影响行数；taskID 为空或 tokens<=0 时直接返回 (0, nil)。
 func UpdateTaskLogCompletionTokens(userId int, channelId int, taskID string, completionTokens int) (int64, error) {
+	return UpdateTaskLogSettlement(userId, channelId, taskID, completionTokens, "", nil)
+}
+
+// UpdateTaskLogSettlement merges completion-time billing details into the
+// original task consume log. It uses only GORM operations supported by SQLite,
+// MySQL, and PostgreSQL.
+func UpdateTaskLogSettlement(userId int, channelId int, taskID string, completionTokens int, content string, otherUpdates map[string]interface{}) (int64, error) {
 	if taskID == "" || completionTokens <= 0 {
 		return 0, nil
 	}
 	pattern := fmt.Sprintf(`%%"task_id":"%s"%%`, taskID)
-	res := LOG_DB.Model(&Log{}).
+	var log Log
+	query := LOG_DB.
 		Where("user_id = ? AND channel_id = ? AND type = ? AND other LIKE ?",
 			userId, channelId, LogTypeConsume, pattern).
-		Updates(map[string]interface{}{"completion_tokens": completionTokens})
+		Order("id DESC").
+		Take(&log)
+	if errors.Is(query.Error, gorm.ErrRecordNotFound) {
+		return 0, nil
+	}
+	if query.Error != nil {
+		return 0, query.Error
+	}
+
+	updates := map[string]interface{}{"completion_tokens": completionTokens}
+	if content != "" {
+		updates["content"] = content
+	}
+	if len(otherUpdates) > 0 {
+		other, _ := common.StrToMap(log.Other)
+		if other == nil {
+			other = make(map[string]interface{})
+		}
+		for key, value := range otherUpdates {
+			other[key] = value
+		}
+		updates["other"] = common.MapToJsonStr(other)
+	}
+
+	res := LOG_DB.Model(&Log{}).Where("id = ?", log.Id).Updates(updates)
 	if res.Error != nil {
 		return 0, res.Error
 	}

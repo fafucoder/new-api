@@ -45,6 +45,7 @@ import ModelPage from './pages/Model';
 import ModelDeploymentPage from './pages/ModelDeployment';
 import Playground from './pages/Playground';
 import VideoPlayground from './pages/VideoPlayground';
+import AssetLibrary from './pages/AssetLibrary';
 import Subscription from './pages/Subscription';
 import OAuth2Callback from './components/auth/OAuth2Callback';
 import PersonalSetting from './components/settings/PersonalSetting';
@@ -178,6 +179,14 @@ function App() {
           element={
             <PrivateRoute>
               <VideoPlayground />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path='/console/assets'
+          element={
+            <PrivateRoute>
+              <AssetLibrary />
             </PrivateRoute>
           }
         />

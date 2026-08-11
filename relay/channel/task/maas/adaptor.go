@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/task/taskcommon"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/billing_setting"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
@@ -147,6 +148,24 @@ func (a *TaskAdaptor) BuildRequestHeader(_ *gin.Context, req *http.Request, _ *r
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
 	return nil
+}
+
+// EstimateTokenCount estimates the usage that will be available when the task
+// completes. Dynamic pricing applies the reference-video distinction in the
+// configured unit price, so it must use raw provider tokens instead of the
+// legacy resource-package multiplier.
+func (a *TaskAdaptor) EstimateTokenCount(c *gin.Context, info *relaycommon.RelayInfo) int {
+	req, err := relaycommon.GetTaskRequest(c)
+	if err != nil {
+		return 0
+	}
+	common.SetContextKey(c, constant.ContextKeyLocalCountTokens, true)
+	body := a.convertToRequestPayload(&req, "")
+	duration := derefInt(body.Duration)
+	if billing_setting.GetBillingMode(info.OriginModelName) == billing_setting.BillingModeTieredExpr {
+		return estimateSeedanceRawTokens(body.Resolution, body.Ratio, duration)
+	}
+	return estimateSeedanceTokens(body.Resolution, body.Ratio, duration, hasVideoInput(body.Content))
 }
 
 func (a *TaskAdaptor) BuildRequestBody(c *gin.Context, info *relaycommon.RelayInfo) (io.Reader, error) {
@@ -401,7 +420,7 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 }
 
 func (a *TaskAdaptor) GetModelList() []string { return ModelList }
-func (a *TaskAdaptor) GetChannelName() string  { return ChannelName }
+func (a *TaskAdaptor) GetChannelName() string { return ChannelName }
 
 // AdjustBillingOnComplete 在任务到达终态时被 settle 逻辑调用。
 // 上游 MaaS Seedance 不会返回 usage 字段，这里按火山官方公式本地估算 token：
@@ -433,7 +452,12 @@ func (a *TaskAdaptor) AdjustBillingOnComplete(task *model.Task, taskResult *rela
 		duration = snap.Duration
 	}
 
-	tokens := estimateSeedanceTokens(resolution, ratio, duration, snap.HasVideoInput)
+	tokens := 0
+	if bc := task.PrivateData.BillingContext; bc != nil && bc.TieredBillingSnapshot != nil {
+		tokens = estimateSeedanceRawTokens(resolution, ratio, duration)
+	} else {
+		tokens = estimateSeedanceTokens(resolution, ratio, duration, snap.HasVideoInput)
+	}
 	if tokens <= 0 {
 		return 0
 	}

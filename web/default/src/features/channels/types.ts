@@ -105,6 +105,17 @@ export interface ChannelOtherSettings {
   upstream_model_update_ignored_models?: string[]
   upstream_model_update_last_check_time?: number
   upstream_model_update_last_detected_models?: string[]
+  asset_library?: {
+    enabled?: boolean
+    base_url?: string
+    list_path?: string
+    create_path?: string
+    detail_path?: string
+    append_path?: string
+    import_url_path?: string
+    import_urls_path?: string
+    delete_asset_path?: string
+  }
 }
 
 // ============================================================================

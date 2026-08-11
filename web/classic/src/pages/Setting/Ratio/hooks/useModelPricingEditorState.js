@@ -22,6 +22,11 @@ import {
   combineBillingExpr,
   splitBillingExprAndRequestRules,
 } from '../components/requestRuleExpr';
+import {
+  createDefaultVideoPricingConfig,
+  generateVideoPricingExpr,
+  tryParseVideoPricingConfig,
+} from '../components/videoPricing';
 
 export const PAGE_SIZE = 10;
 export const PRICE_SUFFIX = '$/1M tokens';
@@ -30,6 +35,7 @@ const EMPTY_CANDIDATE_MODEL_NAMES = [];
 const EMPTY_MODEL = {
   name: '',
   billingMode: 'per-token',
+  editorType: 'per-token',
   fixedPrice: '',
   inputPrice: '',
   completionPrice: '',
@@ -131,6 +137,9 @@ const buildModelState = (name, sourceMaps) => {
       ...EMPTY_MODEL,
       name,
       billingMode: 'tiered_expr',
+      editorType: tryParseVideoPricingConfig(billingExpr)
+        ? 'video'
+        : 'tiered_expr',
       billingExpr,
       requestRuleExpr,
       rawRatios: { ...EMPTY_MODEL.rawRatios },
@@ -158,10 +167,14 @@ const buildModelState = (name, sourceMaps) => {
       ? formatNumber(inputPriceNumber * Number(audioRatio))
       : '';
 
+  const standardBillingMode = hasValue(fixedPrice)
+    ? 'per-request'
+    : 'per-token';
   return {
     ...EMPTY_MODEL,
     name,
-    billingMode: hasValue(fixedPrice) ? 'per-request' : 'per-token',
+    billingMode: standardBillingMode,
+    editorType: standardBillingMode,
     fixedPrice,
     inputPrice,
     completionRatioLocked: completionRatioMeta.locked,
@@ -225,7 +238,8 @@ const buildModelState = (name, sourceMaps) => {
 
 export const isBasePricingUnset = (model) =>
   model.billingMode !== 'tiered_expr' &&
-  !hasValue(model.fixedPrice) && !hasValue(model.inputPrice);
+  !hasValue(model.fixedPrice) &&
+  !hasValue(model.inputPrice);
 
 export const getModelWarnings = (model, t) => {
   if (!model) {
@@ -291,9 +305,13 @@ export const getModelWarnings = (model, t) => {
 export const buildSummaryText = (model, t) => {
   const requestRuleSuffix =
     model.billingMode === 'tiered_expr' && model.requestRuleExpr
-    ? `，${t('请求规则')}`
-    : '';
+      ? `，${t('请求规则')}`
+      : '';
   if (model.billingMode === 'tiered_expr') {
+    const videoConfig = tryParseVideoPricingConfig(model.billingExpr);
+    if (videoConfig) {
+      return `${t('视频定价')} (${videoConfig.rows.length} ${t('项')})${requestRuleSuffix}`;
+    }
     const expr = model.billingExpr;
     if (!expr) return `${t('表达式计费')}${requestRuleSuffix}`;
     const tierCount = (expr.match(/tier\(/g) || []).length;
@@ -467,6 +485,13 @@ export const buildPreviewRows = (model, t) => {
         value: 'tiered_expr',
       },
     ];
+    if (tryParseVideoPricingConfig(model.billingExpr)) {
+      rows.push({
+        key: 'PricingType',
+        label: t('计费类型'),
+        value: t('视频定价'),
+      });
+    }
     if (finalBillingExpr) {
       const tierCount = (model.billingExpr.match(/tier\(/g) || []).length;
       rows.push({
@@ -646,8 +671,12 @@ export function useModelPricingEditorState({
       ImageRatio: parseOptionJSON(options.ImageRatio),
       AudioRatio: parseOptionJSON(options.AudioRatio),
       AudioCompletionRatio: parseOptionJSON(options.AudioCompletionRatio),
-      ModelBillingMode: parseOptionJSON(options['billing_setting.billing_mode']),
-      ModelBillingExpr: parseOptionJSON(options['billing_setting.billing_expr']),
+      ModelBillingMode: parseOptionJSON(
+        options['billing_setting.billing_mode'],
+      ),
+      ModelBillingExpr: parseOptionJSON(
+        options['billing_setting.billing_expr'],
+      ),
     };
 
     const names = new Set([
@@ -875,8 +904,22 @@ export function useModelPricingEditorState({
   const handleBillingModeChange = (value) => {
     if (!selectedModel) return;
     upsertModel(selectedModel.name, (model) => {
-      const next = { ...model, billingMode: value };
-      if (value === 'tiered_expr' && !model.billingExpr) {
+      const billingMode = value === 'video' ? 'tiered_expr' : value;
+      const next = { ...model, billingMode, editorType: value };
+      if (value === 'video') {
+        if (!tryParseVideoPricingConfig(model.billingExpr)) {
+          next.billingExpr = generateVideoPricingExpr(
+            createDefaultVideoPricingConfig(),
+          );
+        }
+        next.requestRuleExpr = '';
+      } else if (
+        value === 'tiered_expr' &&
+        tryParseVideoPricingConfig(model.billingExpr)
+      ) {
+        next.billingExpr = 'tier("base", p * 0 + c * 0)';
+        next.requestRuleExpr = '';
+      } else if (value === 'tiered_expr' && !model.billingExpr) {
         next.billingExpr = 'tier("base", p * 0 + c * 0)';
       }
       return next;
@@ -963,6 +1006,7 @@ export function useModelPricingEditorState({
         const nextModel = {
           ...model,
           billingMode: selectedModel.billingMode,
+          editorType: selectedModel.editorType,
           fixedPrice: selectedModel.fixedPrice,
           inputPrice: selectedModel.inputPrice,
           completionPrice: selectedModel.completionPrice,
@@ -1046,8 +1090,10 @@ export function useModelPricingEditorState({
             model.requestRuleExpr,
           );
           if (finalBillingExpr) {
-            tieredOutput['billing_setting.billing_mode'][model.name] = 'tiered_expr';
-            tieredOutput['billing_setting.billing_expr'][model.name] = finalBillingExpr;
+            tieredOutput['billing_setting.billing_mode'][model.name] =
+              'tiered_expr';
+            tieredOutput['billing_setting.billing_expr'][model.name] =
+              finalBillingExpr;
           }
         }
 

@@ -86,6 +86,11 @@ func (BaseBilling) EstimateBilling(_ *gin.Context, _ *relaycommon.RelayInfo) map
 	return nil
 }
 
+// EstimateTokenCount returns 0 when the adaptor cannot estimate task usage.
+func (BaseBilling) EstimateTokenCount(_ *gin.Context, _ *relaycommon.RelayInfo) int {
+	return 0
+}
+
 // AdjustBillingOnSubmit returns nil (no submit-time adjustment).
 func (BaseBilling) AdjustBillingOnSubmit(_ *relaycommon.RelayInfo, _ []byte) map[string]float64 {
 	return nil

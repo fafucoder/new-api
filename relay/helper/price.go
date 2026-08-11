@@ -224,6 +224,25 @@ func ModelPriceHelperPerCall(c *gin.Context, info *relaycommon.RelayInfo) (types
 	return priceData, nil
 }
 
+// ModelPriceHelperTask selects the task pricing path. Expression-based task
+// models use estimated completion tokens; legacy task models retain the
+// existing per-call/ratio behavior.
+func ModelPriceHelperTask(c *gin.Context, info *relaycommon.RelayInfo, estimatedCompletionTokens int) (types.PriceData, error) {
+	if billing_setting.GetBillingMode(info.OriginModelName) != billing_setting.BillingModeTieredExpr {
+		return ModelPriceHelperPerCall(c, info)
+	}
+
+	priceData, err := modelPriceHelperTiered(c, info, 0, &types.TokenCountMeta{
+		MaxTokens: estimatedCompletionTokens,
+	}, HandleGroupRatio(c, info))
+	if err != nil {
+		return types.PriceData{}, err
+	}
+	priceData.Quota = priceData.QuotaToPreConsume
+	info.PriceData = priceData
+	return priceData, nil
+}
+
 func HasModelBillingConfig(modelName string) bool {
 	if _, ok := ratio_setting.GetModelPrice(modelName, false); ok {
 		return true

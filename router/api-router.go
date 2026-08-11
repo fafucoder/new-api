@@ -182,6 +182,19 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			channelUptimeRoute.GET("/status", controller.GetChannelUptimeStatus)
 		}
+		assetLibraryRoute := apiRouter.Group("/asset-library")
+		assetLibraryRoute.Use(middleware.UserAuth())
+		{
+			assetLibraryRoute.GET("/channels", controller.GetAssetLibraryChannels)
+			assetLibraryRoute.GET("/groups", controller.GetAssetLibraryGroups)
+			assetLibraryRoute.POST("/groups", middleware.CriticalRateLimit(), controller.PostAssetLibraryGroup)
+			assetLibraryRoute.GET("/groups/:id", controller.GetAssetLibraryGroup)
+			assetLibraryRoute.PATCH("/groups/:id", controller.PatchAssetLibraryGroup)
+			assetLibraryRoute.DELETE("/groups/:id", controller.DeleteAssetLibraryGroup)
+			assetLibraryRoute.POST("/groups/:id/refresh", controller.PostRefreshAssetLibraryGroup)
+			assetLibraryRoute.POST("/groups/:id/assets", middleware.CriticalRateLimit(), controller.PostAssetLibraryGroupAssets)
+			assetLibraryRoute.DELETE("/groups/:id/assets/:assetId", controller.DeleteAssetLibraryAsset)
+		}
 		modelUptimeRoute := apiRouter.Group("/model-uptime")
 		modelUptimeRoute.Use(middleware.UserAuth())
 		{

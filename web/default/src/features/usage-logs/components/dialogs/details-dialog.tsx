@@ -29,9 +29,14 @@ import {
   ShieldCheck,
   UserCog,
   Info,
+  ExternalLink,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { formatBillingCurrencyFromUSD } from '@/lib/currency'
+import {
+  formatBillingCurrencyFromUSD,
+  getCurrencyDisplay,
+  getCurrencyLabel,
+} from '@/lib/currency'
 import { formatLogQuota, formatTokens, formatUseTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
@@ -147,10 +152,94 @@ function BillingBreakdown(props: {
   const isTieredExpr = other.billing_mode === 'tiered_expr'
   const tieredSummary = getTieredBillingSummary(other)
 
-  const rows: Array<{ label: string; value: string }> = []
+  const rows: Array<{ label: string; value: React.ReactNode }> = []
   const priceOpts = { digitsLarge: 4, digitsSmall: 6, abbreviate: false }
   const fmtPrice = (usd: number) => formatBillingCurrencyFromUSD(usd, priceOpts)
   const baseInputUSD = other.model_ratio != null ? other.model_ratio * 2.0 : 0
+  const videoBilling = other.video_billing
+
+  if (videoBilling) {
+    const { meta } = getCurrencyDisplay()
+    const currencyLabel = meta.kind === 'tokens' ? 'USD' : getCurrencyLabel()
+    const tokens = videoBilling.tokens ?? log.completion_tokens ?? 0
+    const unitPriceUSD = videoBilling.unit_price_usd ?? 0
+    const groupRatio = videoBilling.group_ratio ?? other.group_ratio ?? 1
+    const finalAmountUSD =
+      videoBilling.final_amount_usd ??
+      (videoBilling.amount_before_group_usd ??
+        (tokens * unitPriceUSD) / 1_000_000) * groupRatio
+    const deductedAmountUSD = videoBilling.deducted_amount_usd ?? finalAmountUSD
+    const formattedUnitPrice = fmtPrice(unitPriceUSD)
+    const formattedFinalAmount = fmtPrice(finalAmountUSD)
+
+    rows.push(
+      { label: t('Billing Mode'), value: t('Dynamic Pricing') },
+      { label: t('Tokens'), value: tokens.toLocaleString() },
+      {
+        label: t('Unit price'),
+        value: `${formattedUnitPrice} / 1M Tokens`,
+      },
+      {
+        label: t('Pricing Unit'),
+        value: `${currencyLabel} / 1M Tokens`,
+      },
+      { label: t('Resolution'), value: videoBilling.resolution || '-' },
+      {
+        label: t('Reference Video'),
+        value: videoBilling.reference_video ? t('Yes') : t('No'),
+      },
+      {
+        label: t('Group Ratio'),
+        value: `${formatRatio(groupRatio)}x`,
+      },
+      {
+        label: t('Billing Process'),
+        value: `${tokens.toLocaleString()} × ${formattedUnitPrice} / 1M Tokens × ${formatRatio(groupRatio)} = ${formattedFinalAmount}`,
+      },
+      { label: t('Final Amount'), value: formattedFinalAmount },
+      {
+        label: t('Deducted Amount'),
+        value: fmtPrice(deductedAmountUSD),
+      }
+    )
+
+    if (isAdmin && other.admin_info) {
+      rows.push({
+        label: t('Billing Source'),
+        value: other.admin_info.local_count_tokens
+          ? t('Local Billing')
+          : t('Upstream Response'),
+      })
+    }
+
+    if (videoBilling.video_url) {
+      rows.push({
+        label: t('Video URL'),
+        value: (
+          <a
+            href={videoBilling.video_url}
+            target='_blank'
+            rel='noreferrer'
+            className='inline-flex min-w-0 items-start gap-1 text-blue-600 underline underline-offset-2 dark:text-blue-400'
+          >
+            <span className='min-w-0 break-all'>{videoBilling.video_url}</span>
+            <ExternalLink
+              className='mt-0.5 size-3 shrink-0'
+              aria-hidden='true'
+            />
+          </a>
+        ),
+      })
+    }
+
+    return (
+      <DetailSection label={t('Billing Details')}>
+        {rows.map((row, idx) => (
+          <DetailRow key={idx} label={row.label} value={row.value} mono />
+        ))}
+      </DetailSection>
+    )
+  }
 
   if (isTieredExpr) {
     rows.push({
@@ -416,6 +505,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
     !isViolation &&
     other?.billing_mode === 'tiered_expr' &&
     !!other?.expr_b64
+  const hasVideoBilling = !!other?.video_billing
   const hasAudioTokens = other?.ws || other?.audio
   const showTiming = isTimingLogType(props.log.type)
   const showAdminIp =
@@ -839,7 +929,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             )}
 
             {/* Token breakdown (for consume/error types with token data) */}
-            {isDisplayableType(props.log.type) && other && (
+            {isDisplayableType(props.log.type) && other && !hasVideoBilling && (
               <TokenBreakdown log={props.log} other={other} />
             )}
 
@@ -853,7 +943,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
             )}
 
             {/* Tiered pricing breakdown (when billing_mode is tiered_expr) */}
-            {isTieredBilling && other?.expr_b64 && (
+            {isTieredBilling && !hasVideoBilling && other?.expr_b64 && (
               <div className='bg-muted/30 min-w-0 overflow-hidden rounded-md border px-3 max-sm:px-2'>
                 <DynamicPricingBreakdown
                   billingExpr={decodeBillingExprB64(other.expr_b64)}

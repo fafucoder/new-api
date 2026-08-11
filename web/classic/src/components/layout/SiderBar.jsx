@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLucideIcon } from '../../helpers/render';
@@ -27,6 +27,7 @@ import { useSidebar } from '../../hooks/common/useSidebar';
 import { useMinimumLoadingTime } from '../../hooks/common/useMinimumLoadingTime';
 import { isAdmin, isRoot, showError } from '../../helpers';
 import SkeletonWrapper from './components/SkeletonWrapper';
+import { StatusContext } from '../../context/Status';
 
 import { Nav, Divider, Button } from '@douyinfe/semi-ui';
 
@@ -46,6 +47,7 @@ const routerMap = {
   detail: '/console',
   pricing: '/pricing',
   task: '/console/task',
+  assets: '/console/assets',
   models: '/console/models',
   deployment: '/console/deployment',
   playground: '/console/playground',
@@ -62,6 +64,7 @@ const routerMap = {
 
 const SiderBar = ({ onNavigate = () => {} }) => {
   const { t } = useTranslation();
+  const [statusState] = useContext(StatusContext);
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
   const {
     isModuleVisible,
@@ -115,6 +118,15 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           localStorage.getItem('enable_task') === 'true' ? '' : 'tableHiddle',
       },
       {
+        text: t('素材库'),
+        itemKey: 'assets',
+        to: '/console/assets',
+        className:
+          statusState?.status?.asset_library_enabled === true
+            ? ''
+            : 'tableHiddle',
+      },
+      {
         text: t('服务状态'),
         itemKey: 'status',
         to: '/console/status',
@@ -142,6 +154,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     localStorage.getItem('enable_data_export'),
     localStorage.getItem('enable_drawing'),
     localStorage.getItem('enable_task'),
+    statusState?.status?.asset_library_enabled,
     t,
     isModuleVisible,
   ]);

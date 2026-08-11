@@ -104,6 +104,19 @@ const REGION_EXAMPLE = {
 };
 const UPSTREAM_DETECTED_MODEL_PREVIEW_LIMIT = 8;
 const ADVANCED_SETTINGS_EXPANDED_KEY = 'channel-advanced-settings-expanded';
+const ASSET_LIBRARY_DEFAULTS = {
+  asset_library_enabled: false,
+  asset_library_base_url: '',
+  asset_library_list_path: '/api/video-studio/assets/ecloud',
+  asset_library_create_path: '/api/video-studio/assets/ecloud/upload-and-save',
+  asset_library_detail_path: '/api/video-studio/assets/ecloud/{groupId}',
+  asset_library_append_path:
+    '/api/video-studio/assets/ecloud/{groupId}/upload-and-save',
+  asset_library_import_url_path: '/api/video-studio/assets/ecloud/import-url',
+  asset_library_import_urls_path: '/api/video-studio/assets/ecloud/import-urls',
+  asset_library_delete_asset_path:
+    '/api/video-studio/assets/ecloud/{groupId}/assets/{assetId}',
+};
 
 const PARAM_OVERRIDE_LEGACY_TEMPLATE = {
   temperature: 0,
@@ -216,6 +229,7 @@ const EditChannelModal = (props) => {
     upstream_model_update_last_check_time: 0,
     upstream_model_update_last_detected_models: [],
     upstream_model_update_ignored_models: '',
+    ...ASSET_LIBRARY_DEFAULTS,
   };
   const [batch, setBatch] = useState(false);
   const [multiToSingle, setMultiToSingle] = useState(false);
@@ -969,6 +983,34 @@ const EditChannelModal = (props) => {
         data.upstream_model_update_last_check_time = 0;
         data.upstream_model_update_last_detected_models = [];
         data.upstream_model_update_ignored_models = '';
+      }
+
+      Object.assign(data, ASSET_LIBRARY_DEFAULTS);
+      if (data.settings) {
+        try {
+          const assetLibrary = JSON.parse(data.settings).asset_library;
+          if (assetLibrary && typeof assetLibrary === 'object') {
+            data.asset_library_enabled = assetLibrary.enabled === true;
+            data.asset_library_base_url = assetLibrary.base_url || '';
+            data.asset_library_list_path =
+              assetLibrary.list_path || data.asset_library_list_path;
+            data.asset_library_create_path =
+              assetLibrary.create_path || data.asset_library_create_path;
+            data.asset_library_detail_path =
+              assetLibrary.detail_path || data.asset_library_detail_path;
+            data.asset_library_append_path =
+              assetLibrary.append_path || data.asset_library_append_path;
+            data.asset_library_import_url_path =
+              assetLibrary.import_url_path || data.asset_library_import_url_path;
+            data.asset_library_import_urls_path =
+              assetLibrary.import_urls_path || data.asset_library_import_urls_path;
+            data.asset_library_delete_asset_path =
+              assetLibrary.delete_asset_path ||
+              data.asset_library_delete_asset_path;
+          }
+        } catch (error) {
+          console.error('解析素材库渠道映射失败:', error);
+        }
       }
 
       if (
@@ -1835,6 +1877,28 @@ const EditChannelModal = (props) => {
       settings.upstream_model_update_last_check_time = 0;
     }
 
+    if (localInputs.asset_library_enabled) {
+      settings.asset_library = {
+        enabled: true,
+        base_url: String(localInputs.asset_library_base_url || '').trim(),
+        list_path: String(localInputs.asset_library_list_path || '').trim(),
+        create_path: String(localInputs.asset_library_create_path || '').trim(),
+        detail_path: String(localInputs.asset_library_detail_path || '').trim(),
+        append_path: String(localInputs.asset_library_append_path || '').trim(),
+        import_url_path: String(
+          localInputs.asset_library_import_url_path || '',
+        ).trim(),
+        import_urls_path: String(
+          localInputs.asset_library_import_urls_path || '',
+        ).trim(),
+        delete_asset_path: String(
+          localInputs.asset_library_delete_asset_path || '',
+        ).trim(),
+      };
+    } else {
+      delete settings.asset_library;
+    }
+
     localInputs.settings = JSON.stringify(settings);
 
     // 清理不需要发送到后端的字段
@@ -1862,6 +1926,15 @@ const EditChannelModal = (props) => {
     delete localInputs.upstream_model_update_last_check_time;
     delete localInputs.upstream_model_update_last_detected_models;
     delete localInputs.upstream_model_update_ignored_models;
+    delete localInputs.asset_library_enabled;
+    delete localInputs.asset_library_base_url;
+    delete localInputs.asset_library_list_path;
+    delete localInputs.asset_library_create_path;
+    delete localInputs.asset_library_detail_path;
+    delete localInputs.asset_library_append_path;
+    delete localInputs.asset_library_import_url_path;
+    delete localInputs.asset_library_import_urls_path;
+    delete localInputs.asset_library_delete_asset_path;
 
     let res;
     localInputs.auto_ban = localInputs.auto_ban ? 1 : 0;
@@ -2220,6 +2293,54 @@ const EditChannelModal = (props) => {
           {() => {
             const advancedSettingsContent = (
               <div className='space-y-4'>
+                <div className='pb-3 border-b border-gray-100'>
+                  <Text className='text-sm font-medium text-gray-500 mb-3 block'>
+                    {t('素材库映射')}
+                  </Text>
+                  <Form.Switch
+                    field='asset_library_enabled'
+                    label={t('为此渠道启用素材库')}
+                    checkedText={t('开')}
+                    uncheckedText={t('关')}
+                    onChange={(value) =>
+                      handleInputChange('asset_library_enabled', value)
+                    }
+                    extraText={t('上传内容会同步到每个已启用的渠道映射')}
+                  />
+                  {inputs.asset_library_enabled && (
+                    <>
+                      <Form.Input
+                        field='asset_library_base_url'
+                        label={t('素材 API 基础地址')}
+                        placeholder={inputs.base_url || 'https://api.example.com'}
+                        onChange={(value) =>
+                          handleInputChange('asset_library_base_url', value)
+                        }
+                        extraText={t('留空时使用渠道基础地址，接口路径不会自动推断')}
+                        showClear
+                      />
+                      <Row gutter={12}>
+                        {[
+                          ['asset_library_list_path', '素材组列表路径'],
+                          ['asset_library_create_path', '创建素材组并上传路径'],
+                          ['asset_library_detail_path', '素材组详情路径'],
+                          ['asset_library_append_path', '追加文件路径'],
+                          ['asset_library_import_url_path', '导入 URL 路径'],
+                          ['asset_library_import_urls_path', '批量导入 URL 路径'],
+                          ['asset_library_delete_asset_path', '删除素材路径'],
+                        ].map(([field, label]) => (
+                          <Col key={field} xs={24} sm={12}>
+                            <Form.Input
+                              field={field}
+                              label={t(label)}
+                              onChange={(value) => handleInputChange(field, value)}
+                            />
+                          </Col>
+                        ))}
+                      </Row>
+                    </>
+                  )}
+                </div>
                 {/* Upstream Model Management Section */}
                 {MODEL_FETCHABLE_CHANNEL_TYPES.has(inputs.type) && (
                 <div className='pb-3 border-b border-gray-100'>

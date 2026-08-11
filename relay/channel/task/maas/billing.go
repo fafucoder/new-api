@@ -69,14 +69,21 @@ func resolveDimensions(resolution, ratio string) (int, int) {
 // estimateSeedanceTokens 计算单次任务的 token 数。
 // hasVideoInput=true 时不乘倍率；false 时乘 1.6429。
 func estimateSeedanceTokens(resolution, ratio string, duration int, hasVideoInput bool) int {
+	raw := estimateSeedanceRawTokens(resolution, ratio, duration)
+	if !hasVideoInput {
+		raw = int(math.Ceil(float64(raw) * seedanceNoVideoInputRate))
+	}
+	return raw
+}
+
+// estimateSeedanceRawTokens returns provider usage before the legacy
+// no-reference-video resource-package multiplier is applied.
+func estimateSeedanceRawTokens(resolution, ratio string, duration int) int {
 	if duration <= 0 {
 		duration = seedanceDefaultDuration
 	}
 	w, h := resolveDimensions(resolution, ratio)
 	raw := math.Ceil(float64(w*h*seedanceFPS*duration) / float64(seedanceTokenDivisor))
-	if !hasVideoInput {
-		raw = math.Ceil(raw * seedanceNoVideoInputRate)
-	}
 	return int(raw)
 }
 

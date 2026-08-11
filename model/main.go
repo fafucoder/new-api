@@ -286,6 +286,10 @@ func migrateDB() error {
 		&ChannelValidationRecord{},
 		&BalanceAlertRule{},
 		&Invoice{},
+		&AssetLibraryGroup{},
+		&AssetLibraryAsset{},
+		&AssetLibraryGroupChannel{},
+		&AssetLibraryAssetChannel{},
 	)
 	if err != nil {
 		return err
@@ -339,6 +343,10 @@ func migrateDBFast() error {
 		{&ChannelValidationRecord{}, "ChannelValidationRecord"},
 		{&BalanceAlertRule{}, "BalanceAlertRule"},
 		{&Invoice{}, "Invoice"},
+		{&AssetLibraryGroup{}, "AssetLibraryGroup"},
+		{&AssetLibraryAsset{}, "AssetLibraryAsset"},
+		{&AssetLibraryGroupChannel{}, "AssetLibraryGroupChannel"},
+		{&AssetLibraryAssetChannel{}, "AssetLibraryAssetChannel"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))

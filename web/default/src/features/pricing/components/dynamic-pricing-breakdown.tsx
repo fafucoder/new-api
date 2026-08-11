@@ -48,6 +48,7 @@ import {
   type RequestRuleGroup,
   type TierCondition,
 } from '../lib/billing-expr'
+import { parseVideoTierLabel } from '../lib/video-pricing'
 
 type DynamicPricingBreakdownProps = {
   billingExpr: string | null | undefined
@@ -187,6 +188,9 @@ export function DynamicPricingBreakdown({
 
   const hasTiers = tiers.length > 0
   const hasRules = ruleGroups.length > 0
+  const videoTierLabels = tiers.map((tier) => parseVideoTierLabel(tier.label))
+  const isVideoPricing =
+    videoTierLabels.length > 0 && videoTierLabels.every(Boolean)
   const normalizedMatchedTierLabel = normalizeTierLabel(
     matchedTierLabel ?? undefined
   )
@@ -251,10 +255,10 @@ export function DynamicPricingBreakdown({
           <div className='space-y-1.5 sm:hidden'>
             {tiers.map((tier, i) => {
               const condSummary = formatConditionSummary(tier.conditions, t)
+              const videoTier = videoTierLabels[i]
               const isMatched =
-                matchedTierLabel != null &&
-                matchedTierLabel !== '' &&
-                tier.label === matchedTierLabel
+                normalizedMatchedTierLabel !== '' &&
+                normalizeTierLabel(tier.label) === normalizedMatchedTierLabel
               return (
                 <div
                   key={`tier-mobile-${i}`}
@@ -268,8 +272,17 @@ export function DynamicPricingBreakdown({
                       variant='secondary'
                       className='bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
                     >
-                      {tier.label || t('Default')}
+                      {videoTier?.resolution || tier.label || t('Default')}
                     </Badge>
+                    {videoTier && (
+                      <Badge variant='outline'>
+                        {t('Video Input')}:{' '}
+                        {t(videoTier.hasVideoInput ? 'Yes' : 'No')}
+                      </Badge>
+                    )}
+                    {videoTier?.isDefault && (
+                      <Badge variant='outline'>{t('Default')}</Badge>
+                    )}
                     {isMatched && (
                       <Badge
                         variant='secondary'
@@ -312,8 +325,13 @@ export function DynamicPricingBreakdown({
               <TableHeader>
                 <TableRow className='hover:bg-transparent'>
                   <TableHead className='text-muted-foreground py-2 text-[10px] font-medium tracking-wider uppercase'>
-                    {t('Tier')}
+                    {isVideoPricing ? t('Resolution') : t('Tier')}
                   </TableHead>
+                  {isVideoPricing && (
+                    <TableHead className='text-muted-foreground py-2 text-[10px] font-medium tracking-wider uppercase'>
+                      {t('Video Input')}
+                    </TableHead>
+                  )}
                   {visiblePriceFields.map((v) => (
                     <TableHead
                       key={v.field}
@@ -327,6 +345,7 @@ export function DynamicPricingBreakdown({
               <TableBody>
                 {tiers.map((tier, i) => {
                   const condSummary = formatConditionSummary(tier.conditions, t)
+                  const videoTier = videoTierLabels[i]
                   const isMatched =
                     normalizedMatchedTierLabel !== '' &&
                     normalizeTierLabel(tier.label) ===
@@ -345,8 +364,13 @@ export function DynamicPricingBreakdown({
                             variant='secondary'
                             className='bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300'
                           >
-                            {tier.label || t('Default')}
+                            {videoTier?.resolution ||
+                              tier.label ||
+                              t('Default')}
                           </Badge>
+                          {videoTier?.isDefault && (
+                            <Badge variant='outline'>{t('Default')}</Badge>
+                          )}
                           {isMatched && (
                             <Badge
                               variant='secondary'
@@ -362,6 +386,11 @@ export function DynamicPricingBreakdown({
                           </div>
                         )}
                       </TableCell>
+                      {isVideoPricing && (
+                        <TableCell className='py-2.5 align-top text-sm'>
+                          {t(videoTier?.hasVideoInput ? 'Yes' : 'No')}
+                        </TableCell>
+                      )}
                       {visiblePriceFields.map((v) => {
                         const value = Number(
                           tier[v.field as string as keyof ParsedTier] || 0

@@ -5,6 +5,8 @@ import "strings"
 var DemoSiteEnabled = false
 var SelfUseModeEnabled = false
 var LandingPageEnabled = false
+var AssetLibraryEnabled = false
+var VideoTaskPreConsumeEnabled = true
 
 var AutomaticDisableKeywords = []string{
 	"Your credit balance is too low",

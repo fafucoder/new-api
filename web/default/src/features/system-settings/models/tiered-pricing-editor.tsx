@@ -31,6 +31,7 @@ import {
 import { ChevronDown, Copy, Plus, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -41,7 +42,13 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
   Select,
   SelectContent,
@@ -50,6 +57,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -98,6 +114,12 @@ import {
   normalizeVisualTier,
   tryParseVisualConfig,
 } from '@/features/pricing/lib/tier-expr'
+import {
+  type VideoPricingConfig,
+  createDefaultVideoPricingConfig,
+  generateVideoPricingExpr,
+  tryParseVideoPricingConfig,
+} from '@/features/pricing/lib/video-pricing'
 
 const PRICE_SUFFIX = '$/1M tokens'
 const CACHE_PRICE_VARS = BILLING_EXTRA_VARS.filter(
@@ -368,6 +390,8 @@ function DraftNumberInput({
 
   useEffect(() => {
     if (!focused) {
+      // Mirror external form resets while preserving the user's focused draft.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDraft(formatNumberDraft(value))
     }
   }, [focused, value])
@@ -594,7 +618,11 @@ function VisualTierCard({
   const [mediaOpen, setMediaOpen] = useState(hasMediaPricing)
 
   useEffect(() => {
-    if (hasMediaPricing) setMediaOpen(true)
+    if (hasMediaPricing) {
+      // Reveal populated media prices when an external preset is loaded.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setMediaOpen(true)
+    }
   }, [hasMediaPricing])
 
   const renderPriceVariable = (
@@ -865,6 +893,210 @@ function VisualEditor({ visualConfig, onChange }: VisualEditorProps) {
         <Plus className='mr-2 h-4 w-4' />
         {t('Add tier')}
       </Button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Video pricing editor
+// ---------------------------------------------------------------------------
+
+type VideoPricingEditorProps = {
+  config: VideoPricingConfig
+  onChange: (next: VideoPricingConfig) => void
+}
+
+function VideoPricingEditor({ config, onChange }: VideoPricingEditorProps) {
+  const { t } = useTranslation()
+  const { meta } = getCurrencyDisplay()
+  const currencyLabel = meta.kind === 'tokens' ? 'USD' : getCurrencyLabel()
+  const currencyRate =
+    meta.kind === 'currency' || meta.kind === 'custom' ? meta.exchangeRate : 1
+  const rowKeys = config.rows.map(
+    (row) => `${row.resolution.trim().toLowerCase()}|${row.referenceVideo}`
+  )
+  const hasDuplicates = new Set(rowKeys).size !== rowKeys.length
+  const normalizedDefaultResolution = config.defaultResolution
+    .trim()
+    .toLowerCase()
+  const defaultRows = config.rows.filter(
+    (row) => row.resolution.trim().toLowerCase() === normalizedDefaultResolution
+  )
+  const hasCompleteDefault =
+    defaultRows.some((row) => row.referenceVideo) &&
+    defaultRows.some((row) => !row.referenceVideo)
+
+  const updateRow = (
+    index: number,
+    update: Partial<VideoPricingConfig['rows'][number]>
+  ) => {
+    const currentRow = config.rows[index]
+    const nextDefaultResolution =
+      update.resolution !== undefined &&
+      currentRow.resolution.trim().toLowerCase() === normalizedDefaultResolution
+        ? update.resolution
+        : config.defaultResolution
+    onChange({
+      ...config,
+      defaultResolution: nextDefaultResolution,
+      rows: config.rows.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, ...update } : row
+      ),
+    })
+  }
+
+  const toDisplayPrice = (unitPriceUSD: number) =>
+    Number.isFinite(unitPriceUSD) ? unitPriceUSD * currencyRate : 0
+  const toUSDPrice = (displayPrice: number) =>
+    currencyRate > 0 ? displayPrice / currencyRate : displayPrice
+
+  return (
+    <div className='flex flex-col gap-3'>
+      {hasDuplicates && (
+        <Alert variant='destructive'>
+          <AlertDescription>
+            {t(
+              'Each resolution and reference-video combination must be unique.'
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+      {!hasCompleteDefault && (
+        <Alert variant='destructive'>
+          <AlertDescription>
+            {t(
+              'The default resolution requires prices both with and without a reference video.'
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <RadioGroup
+        value={config.defaultResolution}
+        onValueChange={(value) =>
+          onChange({ ...config, defaultResolution: value })
+        }
+      >
+        <Table className='min-w-[680px] table-fixed'>
+          <TableHeader>
+            <TableRow>
+              <TableHead className='w-[22%]'>{t('Resolution')}</TableHead>
+              <TableHead className='w-[12%]'>{t('Default')}</TableHead>
+              <TableHead className='w-[22%]'>{t('Reference Video')}</TableHead>
+              <TableHead className='w-[36%]'>
+                {t('Unit price')} ({currencyLabel} / 1M Tokens)
+              </TableHead>
+              <TableHead className='w-[10%]'>
+                <span className='sr-only'>{t('Actions')}</span>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {config.rows.map((row, index) => (
+              <TableRow key={`${index}-${row.referenceVideo}`}>
+                <TableCell>
+                  <Input
+                    value={row.resolution}
+                    placeholder='720p'
+                    aria-label={t('Resolution')}
+                    onChange={(event) =>
+                      updateRow(index, { resolution: event.target.value })
+                    }
+                  />
+                </TableCell>
+                <TableCell>
+                  {config.rows.findIndex(
+                    (candidate) =>
+                      candidate.resolution.trim().toLowerCase() ===
+                      row.resolution.trim().toLowerCase()
+                  ) === index && (
+                    <RadioGroupItem
+                      value={row.resolution}
+                      aria-label={`${t('Default')}: ${row.resolution}`}
+                    />
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className='flex items-center gap-2'>
+                    <Switch
+                      checked={row.referenceVideo}
+                      aria-label={t('Reference Video')}
+                      onCheckedChange={(checked) =>
+                        updateRow(index, { referenceVideo: checked })
+                      }
+                    />
+                    <span className='text-muted-foreground text-xs'>
+                      {row.referenceVideo ? t('Yes') : t('No')}
+                    </span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <InputGroup>
+                    <InputGroupInput
+                      type='number'
+                      min={0}
+                      step={0.0001}
+                      value={toDisplayPrice(row.unitPriceUSD)}
+                      aria-label={t('Unit price')}
+                      onChange={(event) =>
+                        updateRow(index, {
+                          unitPriceUSD: toUSDPrice(
+                            Number(event.target.value) || 0
+                          ),
+                        })
+                      }
+                    />
+                    <InputGroupAddon align='inline-end'>/ 1M</InputGroupAddon>
+                  </InputGroup>
+                </TableCell>
+                <TableCell className='text-right'>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon-sm'
+                    aria-label={t('Remove pricing row')}
+                    title={t('Remove pricing row')}
+                    disabled={
+                      row.resolution.trim().toLowerCase() ===
+                      normalizedDefaultResolution
+                    }
+                    onClick={() =>
+                      onChange({
+                        ...config,
+                        rows: config.rows.filter(
+                          (_, rowIndex) => rowIndex !== index
+                        ),
+                      })
+                    }
+                  >
+                    <Trash2 />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </RadioGroup>
+
+      <div className='flex flex-wrap items-end justify-between gap-3'>
+        <Button
+          type='button'
+          variant='outline'
+          size='sm'
+          onClick={() =>
+            onChange({
+              ...config,
+              rows: [
+                ...config.rows,
+                { resolution: '', referenceVideo: false, unitPriceUSD: 0 },
+              ],
+            })
+          }
+        >
+          <Plus data-icon='inline-start' />
+          {t('Add pricing row')}
+        </Button>
+      </div>
     </div>
   )
 }
@@ -1622,6 +1854,7 @@ function LlmPromptHelper({ modelName }: LlmPromptHelperProps) {
 // ---------------------------------------------------------------------------
 
 export type TieredPricingEditorProps = {
+  mode?: 'all' | 'video'
   modelName?: string
   billingExpr: string
   requestRuleExpr: string
@@ -1629,9 +1862,10 @@ export type TieredPricingEditorProps = {
   onRequestRuleExprChange: (next: string) => void
 }
 
-type EditorMode = 'visual' | 'raw'
+type EditorMode = 'visual' | 'video' | 'raw'
 
 export const TieredPricingEditor = memo(function TieredPricingEditor({
+  mode = 'all',
   modelName,
   billingExpr: currentExpr,
   requestRuleExpr: currentRequestRuleExpr,
@@ -1639,9 +1873,19 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   onRequestRuleExprChange,
 }: TieredPricingEditorProps) {
   const { t } = useTranslation()
-  const [editorMode, setEditorMode] = useState<EditorMode>('visual')
+  const videoOnly = mode === 'video'
+  const [editorMode, setEditorMode] = useState<EditorMode>(() => {
+    if (videoOnly) return 'video'
+    if (tryParseVisualConfig(currentExpr)) return 'visual'
+    return currentExpr ? 'raw' : 'visual'
+  })
   const [visualConfig, setVisualConfig] = useState<VisualConfig | null>(() =>
     tryParseVisualConfig(currentExpr)
+  )
+  const [videoConfig, setVideoConfig] = useState<VideoPricingConfig>(
+    () =>
+      tryParseVideoPricingConfig(currentExpr) ??
+      createDefaultVideoPricingConfig()
   )
   const [rawExpr, setRawExpr] = useState(() =>
     combineBillingExpr(currentExpr || '', currentRequestRuleExpr || '')
@@ -1654,9 +1898,14 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   useEffect(() => {
     if (initRef.current) return
     initRef.current = true
+    const parsedVideoConfig = tryParseVideoPricingConfig(currentExpr)
     const parsedConfig = tryParseVisualConfig(currentExpr)
-    if (parsedConfig) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+    /* eslint-disable react-hooks/set-state-in-effect -- Reset all editor representations together when the selected model changes. */
+    if (videoOnly) {
+      setVideoConfig(parsedVideoConfig ?? createDefaultVideoPricingConfig())
+      setVisualConfig(null)
+      setEditorMode('video')
+    } else if (parsedConfig) {
       setVisualConfig(parsedConfig)
       setEditorMode('visual')
     } else if (currentExpr) {
@@ -1669,13 +1918,14 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
       combineBillingExpr(currentExpr || '', currentRequestRuleExpr || '')
     )
     setRequestRuleGroups(tryParseRequestRuleExpr(currentRequestRuleExpr) || [])
-  }, [currentExpr, currentRequestRuleExpr])
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [currentExpr, currentRequestRuleExpr, videoOnly])
 
   useEffect(() => {
     initRef.current = false
   }, [modelName])
 
-  const canUseVisualRules = useMemo(() => {
+  const canUseRequestRules = useMemo(() => {
     if (!currentRequestRuleExpr) return true
     return tryParseRequestRuleExpr(currentRequestRuleExpr) !== null
   }, [currentRequestRuleExpr])
@@ -1684,9 +1934,12 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
     if (editorMode === 'visual') {
       return generateExprFromVisualConfig(visualConfig)
     }
+    if (editorMode === 'video') {
+      return generateVideoPricingExpr(videoConfig)
+    }
     const { billingExpr } = splitBillingExprAndRequestRules(rawExpr)
     return billingExpr
-  }, [editorMode, visualConfig, rawExpr])
+  }, [editorMode, visualConfig, videoConfig, rawExpr])
 
   useEffect(() => {
     if (effectiveExpr !== currentExpr) {
@@ -1695,7 +1948,7 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   }, [effectiveExpr, currentExpr, onBillingExprChange])
 
   useEffect(() => {
-    if (editorMode !== 'visual') return
+    if (editorMode === 'raw') return
     const ruleExpr = buildRequestRuleExpr(requestRuleGroups)
     if (ruleExpr !== currentRequestRuleExpr) {
       onRequestRuleExprChange(ruleExpr)
@@ -1723,26 +1976,38 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
 
   const handleModeChange = useCallback(
     (next: EditorMode) => {
+      const currentBaseExpr =
+        editorMode === 'visual'
+          ? generateExprFromVisualConfig(visualConfig)
+          : editorMode === 'video'
+            ? generateVideoPricingExpr(videoConfig)
+            : splitBillingExprAndRequestRules(rawExpr).billingExpr
+      const ruleStr =
+        editorMode === 'raw'
+          ? splitBillingExprAndRequestRules(rawExpr).requestRuleExpr
+          : buildRequestRuleExpr(requestRuleGroups)
+
       if (next === 'visual') {
-        const { billingExpr, requestRuleExpr: ruleStr } =
-          splitBillingExprAndRequestRules(rawExpr)
-        const parsed = tryParseVisualConfig(billingExpr)
-        if (parsed) {
-          setVisualConfig(parsed)
-        } else {
-          setVisualConfig(createDefaultVisualConfig())
-        }
+        const parsed = tryParseVisualConfig(currentBaseExpr)
+        setVisualConfig(parsed ?? createDefaultVisualConfig())
         const parsedGroups = tryParseRequestRuleExpr(ruleStr)
         setRequestRuleGroups(parsedGroups || [])
         onRequestRuleExprChange(ruleStr)
       } else {
-        const expr = generateExprFromVisualConfig(visualConfig)
-        const ruleExpr = buildRequestRuleExpr(requestRuleGroups)
-        setRawExpr(combineBillingExpr(expr, ruleExpr) || expr)
+        setRawExpr(
+          combineBillingExpr(currentBaseExpr, ruleStr) || currentBaseExpr
+        )
       }
       setEditorMode(next)
     },
-    [rawExpr, visualConfig, requestRuleGroups, onRequestRuleExprChange]
+    [
+      editorMode,
+      rawExpr,
+      visualConfig,
+      videoConfig,
+      requestRuleGroups,
+      onRequestRuleExprChange,
+    ]
   )
 
   const applyPreset = useCallback(
@@ -1770,47 +2035,53 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
   }, [])
 
   return (
-    <div className='space-y-4'>
-      <div className='flex items-center justify-between gap-2'>
-        <Label className='text-xs'>{t('Editor mode')}</Label>
-        <Select
-          items={[
-            { value: 'visual', label: t('Visual editor') },
-            { value: 'raw', label: t('Expression editor') },
-          ]}
-          value={editorMode}
-          onValueChange={(value) => handleModeChange(value as EditorMode)}
-        >
-          <SelectTrigger className='w-44' size='sm'>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent alignItemWithTrigger={false}>
-            <SelectGroup>
-              <SelectItem value='visual'>{t('Visual editor')}</SelectItem>
-              <SelectItem value='raw'>{t('Expression editor')}</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </div>
+    <div className='flex flex-col gap-4'>
+      {!videoOnly && (
+        <>
+          <div className='flex items-center justify-between gap-2'>
+            <Label className='text-xs'>{t('Editor mode')}</Label>
+            <Select
+              items={[
+                { value: 'visual', label: t('Visual editor') },
+                { value: 'raw', label: t('Expression editor') },
+              ]}
+              value={editorMode}
+              onValueChange={(value) => handleModeChange(value as EditorMode)}
+            >
+              <SelectTrigger className='w-48' size='sm'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent alignItemWithTrigger={false}>
+                <SelectGroup>
+                  <SelectItem value='visual'>{t('Visual editor')}</SelectItem>
+                  <SelectItem value='raw'>{t('Expression editor')}</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
 
-      <div className='flex flex-wrap items-start gap-x-4 gap-y-1'>
-        <div className='flex-1'>
-          <PresetSection applyPreset={applyPreset} />
-        </div>
-        {editorMode === 'raw' && <LlmPromptHelper modelName={modelName} />}
-      </div>
+          <div className='flex flex-wrap items-start gap-x-4 gap-y-1'>
+            <div className='flex-1'>
+              <PresetSection applyPreset={applyPreset} />
+            </div>
+            {editorMode === 'raw' && <LlmPromptHelper modelName={modelName} />}
+          </div>
+        </>
+      )}
 
-      <div className='bg-muted/30 space-y-3 rounded-md border p-3'>
+      <div className='bg-muted/30 flex flex-col gap-3 rounded-md border p-3'>
         {editorMode === 'visual' ? (
           <VisualEditor
             visualConfig={visualConfig}
             onChange={handleVisualChange}
           />
+        ) : editorMode === 'video' ? (
+          <VideoPricingEditor config={videoConfig} onChange={setVideoConfig} />
         ) : (
           <RawExprEditor exprString={rawExpr} onChange={handleRawChange} />
         )}
 
-        {editorMode === 'visual' && (
+        {editorMode !== 'raw' && !videoOnly && (
           <div className='space-y-3 border-t pt-3'>
             <div className='space-y-1'>
               <h4 className='text-sm font-medium'>
@@ -1823,7 +2094,7 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
               </p>
             </div>
 
-            {currentRequestRuleExpr && !canUseVisualRules ? (
+            {currentRequestRuleExpr && !canUseRequestRules ? (
               <Alert>
                 <AlertDescription className='text-xs'>
                   {t(
@@ -1870,7 +2141,9 @@ export const TieredPricingEditor = memo(function TieredPricingEditor({
         )}
       </div>
 
-      <CostEstimator effectiveExpr={effectiveExpr} />
+      {editorMode !== 'video' && (
+        <CostEstimator effectiveExpr={effectiveExpr} />
+      )}
     </div>
   )
 })

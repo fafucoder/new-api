@@ -130,6 +130,32 @@ func IncreaseQuotaDataTokenUsed(userId int, username string, modelName string, s
 	}
 }
 
+// IncreaseQuotaDataQuota adjusts only the billed quota for an asynchronous
+// task. The request count was already recorded when the task was submitted.
+func IncreaseQuotaDataQuota(userId int, username string, modelName string, submitAt int64, quotaDelta int) {
+	if !common.DataExportEnabled || quotaDelta == 0 {
+		return
+	}
+	createdAt := submitAt - (submitAt % 3600)
+	key := fmt.Sprintf("%d-%s-%s-%d", userId, username, modelName, createdAt)
+
+	CacheQuotaDataLock.Lock()
+	if qd, ok := CacheQuotaData[key]; ok {
+		qd.Quota += quotaDelta
+		CacheQuotaDataLock.Unlock()
+		return
+	}
+	CacheQuotaDataLock.Unlock()
+
+	err := DB.Table("quota_data").
+		Where("user_id = ? and username = ? and model_name = ? and created_at = ?",
+			userId, username, modelName, createdAt).
+		Update("quota", gorm.Expr("quota + ?", quotaDelta)).Error
+	if err != nil {
+		common.SysLog(fmt.Sprintf("IncreaseQuotaDataQuota error: %s", err))
+	}
+}
+
 func GetQuotaDataByUsername(username string, startTime int64, endTime int64) (quotaData []*QuotaData, err error) {
 	var quotaDatas []*QuotaData
 	// 从quota_data表中查询数据

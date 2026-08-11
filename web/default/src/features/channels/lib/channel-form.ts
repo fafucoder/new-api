@@ -78,6 +78,15 @@ export const channelFormSchema = z.object({
   upstream_model_update_check_enabled: z.boolean().optional(),
   upstream_model_update_auto_sync_enabled: z.boolean().optional(),
   upstream_model_update_ignored_models: z.string().optional(),
+  asset_library_enabled: z.boolean().optional(),
+  asset_library_base_url: z.string().optional(),
+  asset_library_list_path: z.string().optional(),
+  asset_library_create_path: z.string().optional(),
+  asset_library_detail_path: z.string().optional(),
+  asset_library_append_path: z.string().optional(),
+  asset_library_import_url_path: z.string().optional(),
+  asset_library_import_urls_path: z.string().optional(),
+  asset_library_delete_asset_path: z.string().optional(),
 })
 
 export type ChannelFormValues = z.infer<typeof channelFormSchema>
@@ -135,6 +144,20 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   upstream_model_update_check_enabled: false,
   upstream_model_update_auto_sync_enabled: false,
   upstream_model_update_ignored_models: '',
+  asset_library_enabled: false,
+  asset_library_base_url: '',
+  asset_library_list_path: '/api/video-studio/assets/ecloud',
+  asset_library_create_path:
+    '/api/video-studio/assets/ecloud/upload-and-save',
+  asset_library_detail_path: '/api/video-studio/assets/ecloud/{groupId}',
+  asset_library_append_path:
+    '/api/video-studio/assets/ecloud/{groupId}/upload-and-save',
+  asset_library_import_url_path:
+    '/api/video-studio/assets/ecloud/import-url',
+  asset_library_import_urls_path:
+    '/api/video-studio/assets/ecloud/import-urls',
+  asset_library_delete_asset_path:
+    '/api/video-studio/assets/ecloud/{groupId}/assets/{assetId}',
 }
 
 // ============================================================================
@@ -189,6 +212,21 @@ export function transformChannelToFormDefaults(
   let upstreamModelUpdateCheckEnabled = false
   let upstreamModelUpdateAutoSyncEnabled = false
   let upstreamModelUpdateIgnoredModels = ''
+  let assetLibraryEnabled = false
+  let assetLibraryBaseURL = ''
+  let assetLibraryListPath = CHANNEL_FORM_DEFAULT_VALUES.asset_library_list_path
+  let assetLibraryCreatePath =
+    CHANNEL_FORM_DEFAULT_VALUES.asset_library_create_path
+  let assetLibraryDetailPath =
+    CHANNEL_FORM_DEFAULT_VALUES.asset_library_detail_path
+  let assetLibraryAppendPath =
+    CHANNEL_FORM_DEFAULT_VALUES.asset_library_append_path
+  let assetLibraryImportURLPath =
+    CHANNEL_FORM_DEFAULT_VALUES.asset_library_import_url_path
+  let assetLibraryImportURLsPath =
+    CHANNEL_FORM_DEFAULT_VALUES.asset_library_import_urls_path
+  let assetLibraryDeleteAssetPath =
+    CHANNEL_FORM_DEFAULT_VALUES.asset_library_delete_asset_path
 
   if (channel.settings) {
     try {
@@ -213,6 +251,25 @@ export function transformChannelToFormDefaults(
       )
         ? parsed.upstream_model_update_ignored_models.join(',')
         : ''
+      const assetLibrary = parsed.asset_library
+      if (assetLibrary && typeof assetLibrary === 'object') {
+        assetLibraryEnabled = assetLibrary.enabled === true
+        assetLibraryBaseURL = assetLibrary.base_url || ''
+        assetLibraryListPath =
+          assetLibrary.list_path || assetLibraryListPath
+        assetLibraryCreatePath =
+          assetLibrary.create_path || assetLibraryCreatePath
+        assetLibraryDetailPath =
+          assetLibrary.detail_path || assetLibraryDetailPath
+        assetLibraryAppendPath =
+          assetLibrary.append_path || assetLibraryAppendPath
+        assetLibraryImportURLPath =
+          assetLibrary.import_url_path || assetLibraryImportURLPath
+        assetLibraryImportURLsPath =
+          assetLibrary.import_urls_path || assetLibraryImportURLsPath
+        assetLibraryDeleteAssetPath =
+          assetLibrary.delete_asset_path || assetLibraryDeleteAssetPath
+      }
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to parse channel settings:', error)
@@ -262,6 +319,15 @@ export function transformChannelToFormDefaults(
     upstream_model_update_check_enabled: upstreamModelUpdateCheckEnabled,
     upstream_model_update_auto_sync_enabled: upstreamModelUpdateAutoSyncEnabled,
     upstream_model_update_ignored_models: upstreamModelUpdateIgnoredModels,
+    asset_library_enabled: assetLibraryEnabled,
+    asset_library_base_url: assetLibraryBaseURL,
+    asset_library_list_path: assetLibraryListPath,
+    asset_library_create_path: assetLibraryCreatePath,
+    asset_library_detail_path: assetLibraryDetailPath,
+    asset_library_append_path: assetLibraryAppendPath,
+    asset_library_import_url_path: assetLibraryImportURLPath,
+    asset_library_import_urls_path: assetLibraryImportURLsPath,
+    asset_library_delete_asset_path: assetLibraryDeleteAssetPath,
   }
 }
 
@@ -384,6 +450,23 @@ function buildSettingsJSON(formData: ChannelFormValues): string {
     if (typeof settingsObj.upstream_model_update_last_check_time !== 'number') {
       settingsObj.upstream_model_update_last_check_time = 0
     }
+  }
+
+  if (formData.asset_library_enabled) {
+    settingsObj.asset_library = {
+      enabled: true,
+      base_url: formData.asset_library_base_url?.trim() || '',
+      list_path: formData.asset_library_list_path?.trim() || '',
+      create_path: formData.asset_library_create_path?.trim() || '',
+      detail_path: formData.asset_library_detail_path?.trim() || '',
+      append_path: formData.asset_library_append_path?.trim() || '',
+      import_url_path: formData.asset_library_import_url_path?.trim() || '',
+      import_urls_path: formData.asset_library_import_urls_path?.trim() || '',
+      delete_asset_path:
+        formData.asset_library_delete_asset_path?.trim() || '',
+    }
+  } else if ('asset_library' in settingsObj) {
+    delete settingsObj.asset_library
   }
 
   return JSON.stringify(settingsObj)

@@ -59,6 +59,7 @@ import {
   combineBillingExpr,
   splitBillingExprAndRequestRules,
 } from '@/features/pricing/lib/billing-expr'
+import { tryParseVideoPricingConfig } from '@/features/pricing/lib/video-pricing'
 import { safeJsonParse } from '../utils/json-parser'
 import {
   ModelPricingEditorPanel,
@@ -125,8 +126,11 @@ const filterBySelectedValues = (
   return filterValue.includes(String(rowValue))
 }
 
-const getModeLabel = (mode?: string) => {
+const getModeLabel = (mode?: string, billingExpr?: string) => {
   if (mode === 'per-request') return 'Per-request'
+  if (mode === 'tiered_expr' && tryParseVideoPricingConfig(billingExpr)) {
+    return 'Video pricing'
+  }
   if (mode === 'tiered_expr') return 'Expression'
   return 'Per-token'
 }
@@ -138,6 +142,10 @@ const getModeVariant = (mode?: string): 'warning' | 'info' | 'success' => {
 }
 
 const getExpressionSummary = (row: ModelRow, t: (key: string) => string) => {
+  const videoConfig = tryParseVideoPricingConfig(row.billingExpr)
+  if (videoConfig) {
+    return `${t('Video pricing')} · ${videoConfig.rows.length}`
+  }
   const tierCount = (row.billingExpr?.match(/tier\(/g) || []).length
   if (tierCount > 0) {
     return `${t('Tiered pricing')} · ${tierCount} ${t('tiers')}`
@@ -172,6 +180,9 @@ const getPriceSummary = (row: ModelRow, t: (key: string) => string) => {
 
 const getPriceDetail = (row: ModelRow, t: (key: string) => string) => {
   if (row.billingMode === 'tiered_expr') {
+    if (tryParseVideoPricingConfig(row.billingExpr)) {
+      return `${t('Resolution')} · ${t('Reference Video')}`
+    }
     return row.requestRuleExpr
       ? t('Includes request rules')
       : t('Expression based')
@@ -596,7 +607,11 @@ export const ModelRatioVisualEditor = memo(
               {row.getValue('name')}
               {row.original.billingMode === 'tiered_expr' && (
                 <StatusBadge
-                  label={t('Tiered')}
+                  label={
+                    tryParseVideoPricingConfig(row.original.billingExpr)
+                      ? t('Video pricing')
+                      : t('Tiered')
+                  }
                   variant='info'
                   copyable={false}
                 />
@@ -619,7 +634,9 @@ export const ModelRatioVisualEditor = memo(
           ),
           cell: ({ row }) => (
             <StatusBadge
-              label={t(getModeLabel(row.original.billingMode))}
+              label={t(
+                getModeLabel(row.original.billingMode, row.original.billingExpr)
+              )}
               variant={getModeVariant(row.original.billingMode)}
               copyable={false}
             />

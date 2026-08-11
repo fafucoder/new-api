@@ -88,6 +88,7 @@ func GetStatus(c *gin.Context) {
 		"demo_site_enabled":             operation_setting.DemoSiteEnabled,
 		"self_use_mode_enabled":         operation_setting.SelfUseModeEnabled,
 		"landing_page_enabled":          operation_setting.LandingPageEnabled,
+		"asset_library_enabled":         operation_setting.AssetLibraryEnabled,
 		"default_use_auto_group":        setting.DefaultUseAutoGroup,
 
 		"usd_exchange_rate": operation_setting.USDExchangeRate,
@@ -95,11 +96,11 @@ func GetStatus(c *gin.Context) {
 		"stripe_unit_price": setting.StripeUnitPrice,
 
 		// 面板启用开关
-		"api_info_enabled":             cs.ApiInfoEnabled,
-		"uptime_kuma_enabled":          cs.UptimeKumaEnabled,
-		"announcements_enabled":        cs.AnnouncementsEnabled,
-		"faq_enabled":                  cs.FAQEnabled,
-		"cache_hit_stats_enabled":      cs.CacheHitStatsEnabled,
+		"api_info_enabled":        cs.ApiInfoEnabled,
+		"uptime_kuma_enabled":     cs.UptimeKumaEnabled,
+		"announcements_enabled":   cs.AnnouncementsEnabled,
+		"faq_enabled":             cs.FAQEnabled,
+		"cache_hit_stats_enabled": cs.CacheHitStatsEnabled,
 
 		// 模块管理配置
 		"HeaderNavModules":    common.OptionMap["HeaderNavModules"],

@@ -34,6 +34,7 @@ import {
   renderModelTag,
   renderModelPriceSimple,
   renderTieredModelPriceSimple,
+  convertUSDToCurrency,
 } from '../../../helpers';
 import { IconHelpCircle } from '@douyinfe/semi-icons';
 import { CircleAlert, Route, Sparkles } from 'lucide-react';
@@ -144,10 +145,7 @@ function renderType(type, t) {
 
 function buildStreamStatusTooltip(ss, t) {
   if (!ss) return null;
-  const lines = [
-    t('流状态') + '：' + t('异常'),
-    (ss.end_reason || 'unknown'),
-  ];
+  const lines = [t('流状态') + '：' + t('异常'), ss.end_reason || 'unknown'];
   if (ss.error_count > 0) {
     lines.push(`${t('软错误')}: ${ss.error_count}`);
   }
@@ -185,11 +183,7 @@ function renderIsStream(bool, t, streamStatus) {
                 userSelect: 'none',
               }}
             >
-              <CircleAlert
-                size={14}
-                strokeWidth={2.5}
-                color='currentColor'
-              />
+              <CircleAlert size={14} strokeWidth={2.5} color='currentColor' />
             </span>
           </Tooltip>
         )}
@@ -461,7 +455,39 @@ function getUsageLogDetailSummary(record, text, billingDisplayMode, t) {
     };
   }
 
-  const summaryOpts = { ...other, displayMode: billingDisplayMode, outputMode: 'segments' };
+  const summaryOpts = {
+    ...other,
+    displayMode: billingDisplayMode,
+    outputMode: 'segments',
+  };
+
+  if (other?.video_billing) {
+    const videoBilling = other.video_billing;
+    const tokens = videoBilling.tokens ?? record.completion_tokens ?? 0;
+    const unitPriceUSD = Number(videoBilling.unit_price_usd) || 0;
+    const groupRatio =
+      Number(videoBilling.group_ratio ?? other.group_ratio) || 1;
+    const finalAmountUSD =
+      videoBilling.final_amount_usd ??
+      (videoBilling.amount_before_group_usd ??
+        (tokens * unitPriceUSD) / 1000000) * groupRatio;
+    return {
+      segments: [
+        {
+          text: `${videoBilling.resolution || '-'} · ${videoBilling.reference_video ? t('有参考视频') : t('无参考视频')}`,
+          tone: 'primary',
+        },
+        {
+          text: `${Number(tokens).toLocaleString()} Tokens × ${convertUSDToCurrency(unitPriceUSD, 4)}/M × ${groupRatio.toFixed(4)}`,
+          tone: 'secondary',
+        },
+        {
+          text: `${t('扣费')}：${convertUSDToCurrency(finalAmountUSD, 5)}`,
+          tone: 'secondary',
+        },
+      ],
+    };
+  }
 
   if (other?.billing_mode === 'tiered_expr') {
     return { segments: renderTieredModelPriceSimple(summaryOpts) };
@@ -488,6 +514,7 @@ export const getLogsColumns = ({
       key: COLUMN_KEYS.TIME,
       title: t('时间'),
       dataIndex: 'timestamp2string',
+      render: (text) => <span style={{ whiteSpace: 'nowrap' }}>{text}</span>,
     },
     {
       key: COLUMN_KEYS.CHANNEL,
@@ -523,7 +550,13 @@ export const getLogsColumns = ({
             record.type === 2 ||
             record.type === 5 ||
             record.type === 6) ? (
-          <Space>
+          <Space
+            style={{
+              display: 'inline-flex',
+              flexWrap: 'nowrap',
+              whiteSpace: 'nowrap',
+            }}
+          >
             <span style={{ position: 'relative', display: 'inline-block' }}>
               <Tooltip content={record.channel_name || t('未知渠道')}>
                 <span>
@@ -589,11 +622,18 @@ export const getLogsColumns = ({
       dataIndex: 'username',
       render: (text, record, index) => {
         return isAdminUser ? (
-          <div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              minWidth: 0,
+              whiteSpace: 'nowrap',
+            }}
+          >
             <Avatar
               size='extra-small'
               color={stringToColor(text)}
-              style={{ marginRight: 4 }}
+              style={{ marginRight: 4, flexShrink: 0 }}
               onClick={(event) => {
                 event.stopPropagation();
                 showUserInfoFunc(record.user_id);
@@ -601,7 +641,16 @@ export const getLogsColumns = ({
             >
               {typeof text === 'string' && text.slice(0, 1)}
             </Avatar>
-            {text}
+            <span
+              style={{
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {text}
+            </span>
           </div>
         ) : (
           <></>

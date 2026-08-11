@@ -44,6 +44,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CopyButton } from '@/components/copy-button'
 import { GroupBadge } from '@/components/group-badge'
 import { PublicLayout } from '@/components/layout'
+import { StatusBadge } from '@/components/status-badge'
 import { getPerfMetrics } from '@/features/performance-metrics/api'
 import {
   formatLatency,
@@ -62,6 +63,11 @@ import { parseTags } from '../lib/filters'
 import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
 import { inferModelMetadata } from '../lib/model-metadata'
 import { formatFixedPrice, formatGroupPrice } from '../lib/price'
+import {
+  compareVideoPricingRows,
+  parseVideoTierLabel,
+  tryParseVideoPricingConfig,
+} from '../lib/video-pricing'
 import type {
   Modality,
   ModelCapability,
@@ -646,6 +652,26 @@ function GroupPricingSection(props: {
 
   if (isDynamicPricingModel(props.model)) {
     const dynamicTiers = getDynamicPricingTiers(props.model)
+    const videoConfig = tryParseVideoPricingConfig(props.model.billing_expr)
+    const videoPricingTiers = dynamicTiers
+      .flatMap((tier) => {
+        const videoTier = parseVideoTierLabel(tier.label)
+        if (!videoTier) return []
+        return [{ tier, videoTier }]
+      })
+      .sort((left, right) =>
+        compareVideoPricingRows(
+          {
+            resolution: left.videoTier.resolution,
+            referenceVideo: left.videoTier.hasVideoInput,
+          },
+          {
+            resolution: right.videoTier.resolution,
+            referenceVideo: right.videoTier.hasVideoInput,
+          }
+        )
+      )
+    const isVideoPricing = Boolean(videoConfig && videoPricingTiers.length > 0)
 
     if (dynamicTiers.length === 0) {
       return (
@@ -689,6 +715,76 @@ function GroupPricingSection(props: {
           .map((entry) => [entry.field, entry])
       ).values()
     )
+
+    if (isVideoPricing) {
+      return (
+        <section>
+          <SectionTitle>{t('Pricing by Group')}</SectionTitle>
+          <AutoGroupChain model={props.model} autoGroups={props.autoGroups} />
+          <div className='overflow-x-auto rounded-lg border'>
+            <Table className='min-w-[560px] text-sm'>
+              <TableHeader>
+                <TableRow className='hover:bg-transparent'>
+                  <TableHead className={thClass}>{t('Group')}</TableHead>
+                  <TableHead className={thClass}>{t('Tier')}</TableHead>
+                  <TableHead className={thClass}>{t('Video Input')}</TableHead>
+                  <TableHead className={`${thClass} text-right`}>
+                    {t('Price')}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {availableGroups.flatMap((group) => {
+                  const ratio = props.groupRatio[group] ?? 1
+                  return videoPricingTiers.map(
+                    ({ tier, videoTier }, tierIndex) => {
+                      const priceEntry = getDynamicPriceEntries(tier, {
+                        tokenUnit: 'M',
+                        showRechargePrice,
+                        priceRate: props.priceRate,
+                        usdExchangeRate: props.usdExchangeRate,
+                        groupRatioMultiplier: ratio,
+                      }).find((entry) => entry.field === 'outputPrice')
+
+                      return (
+                        <TableRow key={`${group}-${tier.label || tierIndex}`}>
+                          {tierIndex === 0 && (
+                            <TableCell
+                              className='py-2.5'
+                              rowSpan={videoPricingTiers.length}
+                            >
+                              <GroupBadge group={group} size='sm' />
+                            </TableCell>
+                          )}
+                          <TableCell className='text-muted-foreground py-2.5 text-xs'>
+                            {videoTier?.resolution || tier.label || '-'}
+                          </TableCell>
+                          <TableCell className='py-2.5'>
+                            <StatusBadge
+                              copyable={false}
+                              label={t(videoTier?.hasVideoInput ? 'Yes' : 'No')}
+                              variant={
+                                videoTier?.hasVideoInput ? 'warning' : 'neutral'
+                              }
+                            />
+                          </TableCell>
+                          <TableCell className='py-2.5 text-right font-mono font-semibold'>
+                            {priceEntry?.formatted ?? '-'}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    }
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </div>
+          <p className='text-muted-foreground/40 mt-1.5 text-[10px]'>
+            {t('Prices shown per')} 1M tokens
+          </p>
+        </section>
+      )
+    }
 
     return (
       <section>
@@ -736,7 +832,7 @@ function GroupPricingSection(props: {
                         return (
                           <TableRow key={`${group}-${tier.label || tierIndex}`}>
                             <TableCell className='text-muted-foreground py-2.5 text-xs'>
-                              {tier.label || t('Default')}
+                              <span>{tier.label || t('Default')}</span>
                             </TableCell>
                             {priceFields.map((fieldEntry) => {
                               const entry = entryMap.get(fieldEntry.field)
@@ -914,6 +1010,9 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
   const isDynamic =
     props.model.billing_mode === 'tiered_expr' &&
     Boolean(props.model.billing_expr)
+  const isVideoPricing = Boolean(
+    tryParseVideoPricingConfig(props.model.billing_expr)
+  )
 
   return (
     <div className='@container/details space-y-4'>
@@ -941,14 +1040,16 @@ export function ModelDetailsContent(props: ModelDetailsContentProps) {
 
           <section className='bg-card/60 space-y-5 rounded-xl border p-4 shadow-sm'>
             <SectionTitle>{t('Pricing')}</SectionTitle>
-            <PriceSection
-              model={props.model}
-              priceRate={props.priceRate}
-              usdExchangeRate={props.usdExchangeRate}
-              tokenUnit={props.tokenUnit}
-              showRechargePrice={showRechargePrice}
-            />
-            {isDynamic && (
+            {!isVideoPricing && (
+              <PriceSection
+                model={props.model}
+                priceRate={props.priceRate}
+                usdExchangeRate={props.usdExchangeRate}
+                tokenUnit={props.tokenUnit}
+                showRechargePrice={showRechargePrice}
+              />
+            )}
+            {isDynamic && !isVideoPricing && (
               <DynamicPricingBreakdown billingExpr={props.model.billing_expr} />
             )}
             <GroupPricingSection

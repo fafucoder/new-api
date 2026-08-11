@@ -102,12 +102,15 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
         const submitTime = row.getValue('submit_time') as number
 
         return (
-          <div className='flex flex-col gap-0.5'>
-            <span className='font-mono text-xs tabular-nums'>
+          <div className='inline-flex flex-nowrap items-center gap-1.5 font-mono whitespace-nowrap'>
+            <span className='shrink-0 text-xs whitespace-nowrap tabular-nums'>
               {formatTimestampToDate(submitTime, 'seconds')}
             </span>
+            <span className='text-muted-foreground/40 text-[11px]' aria-hidden>
+              →
+            </span>
             {log.finish_time ? (
-              <span className='text-muted-foreground/60 font-mono text-[11px] tabular-nums'>
+              <span className='text-muted-foreground/60 shrink-0 text-[11px] whitespace-nowrap tabular-nums'>
                 {formatTimestampToDate(log.finish_time, 'seconds')}
               </span>
             ) : (
@@ -135,14 +138,14 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
         return (
           <button
             type='button'
-            className='flex items-center gap-1.5 text-left'
+            className='inline-flex w-full min-w-0 flex-nowrap items-center gap-1.5 text-left'
             onClick={(e) => {
               e.stopPropagation()
               setSelectedUserId(log.user_id)
               setUserInfoDialogOpen(true)
             }}
           >
-            <Avatar className='ring-border/60 size-6 ring-1'>
+            <Avatar className='ring-border/60 size-6 shrink-0 ring-1'>
               <AvatarFallback
                 className={cn(
                   'text-[11px] font-semibold',
@@ -155,7 +158,7 @@ export function useTaskLogsColumns(isAdmin: boolean): ColumnDef<TaskLog>[] {
                 {sensitiveVisible ? getUserAvatarFallback(displayName) : '•'}
               </AvatarFallback>
             </Avatar>
-            <span className='text-muted-foreground truncate text-sm hover:underline'>
+            <span className='text-muted-foreground min-w-0 truncate text-sm whitespace-nowrap hover:underline'>
               {sensitiveVisible ? displayName : '••••'}
             </span>
           </button>
