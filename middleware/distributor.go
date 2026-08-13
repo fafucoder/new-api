@@ -335,13 +335,24 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		common.SetContextKey(c, constant.ContextKeyRequire4K, isHighRes)
 	} else if strings.HasPrefix(c.Request.URL.Path, "/v1/images/edits") {
 		//modelRequest.Model = common.GetStringIfEmpty(c.PostForm("model"), "gpt-image-1")
+		// 解析图片尺寸，判断是否需要4K渠道（与 /v1/images/generations 保持一致）
+		isHighRes := true
 		contentType := c.ContentType()
 		if slices.Contains([]string{gin.MIMEPOSTForm, gin.MIMEMultipartPOSTForm}, contentType) {
 			req, err := getModelFromRequest(c)
-			if err == nil && req.Model != "" {
-				modelRequest.Model = req.Model
+			if err == nil {
+				if req.Model != "" {
+					modelRequest.Model = req.Model
+				}
+				if req.Size != "" {
+					width, height := parseImageSize(req.Size)
+					if width > 0 && height > 0 {
+						isHighRes = image_size_setting.IsHighResolution(width, height)
+					}
+				}
 			}
 		}
+		common.SetContextKey(c, constant.ContextKeyRequire4K, isHighRes)
 	}
 	if strings.HasPrefix(c.Request.URL.Path, "/v1/audio") {
 		relayMode := relayconstant.RelayModeAudioSpeech
