@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
@@ -224,6 +225,12 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return
 	}
 
+	// 火山原生入口 /api/v3/contents/generations/tasks 只返回 {"id": "<task_id>"}
+	if strings.HasPrefix(c.Request.RequestURI, "/api/v3/contents/generations/tasks") {
+		c.JSON(http.StatusOK, gin.H{"id": info.PublicTaskID})
+		return dResp.ID, responseBody, nil
+	}
+
 	ov := dto.NewOpenAIVideo()
 	ov.ID = info.PublicTaskID
 	ov.TaskID = info.PublicTaskID
@@ -365,4 +372,37 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	}
 
 	return common.Marshal(openAIVideo)
+}
+
+// ConvertToVolcVideo 输出火山原生响应体（GET /api/v3/contents/generations/tasks/{id}）。
+// 用本地存的 originTask.Data（上游返回的响应体）并覆盖 id 为本地 TaskID，
+// 状态字段按火山官方枚举（queued/running/succeeded/failed）输出。
+func (a *TaskAdaptor) ConvertToVolcVideo(originTask *model.Task) ([]byte, error) {
+	var dResp responseTask
+	if len(originTask.Data) > 0 {
+		if err := common.Unmarshal(originTask.Data, &dResp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal doubao task data failed")
+		}
+	}
+	dResp.ID = originTask.TaskID
+	if dResp.Status == "" {
+		dResp.Status = mapTaskStatusToVolc(originTask.Status)
+	}
+	return common.Marshal(dResp)
+}
+
+// mapTaskStatusToVolc 把本地任务状态映射到火山官方枚举。
+func mapTaskStatusToVolc(s model.TaskStatus) string {
+	switch s {
+	case model.TaskStatusQueued, model.TaskStatusSubmitted, model.TaskStatusNotStart:
+		return "queued"
+	case model.TaskStatusInProgress:
+		return "running"
+	case model.TaskStatusSuccess:
+		return "succeeded"
+	case model.TaskStatusFailure:
+		return "failed"
+	default:
+		return "queued"
+	}
 }

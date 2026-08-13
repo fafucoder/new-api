@@ -85,3 +85,9 @@ type TaskAdaptor interface {
 type OpenAIVideoConverter interface {
 	ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error)
 }
+
+// VolcVideoConverter 把本地任务模型转成火山原生视频接口的响应体
+// （POST /api/v3/contents/generations/tasks 与 GET /api/v3/contents/generations/tasks/{id}）。
+type VolcVideoConverter interface {
+	ConvertToVolcVideo(originTask *model.Task) ([]byte, error)
+}

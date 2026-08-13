@@ -370,6 +370,47 @@ func DeleteTaskByTaskId(userId int, taskId string) error {
 	return DB.Where("user_id = ? and task_id = ?", userId, taskId).Delete(&Task{}).Error
 }
 
+// TaskListQuery is a lightweight filter used by ListTasksByUserPlatform.
+type TaskListQuery struct {
+	UserId       int
+	Platform     string // 可选：如 "doubao"、"maas"，空字符串表示不过滤
+	StatusFilter []string
+	CreatedAfter int64 // 秒，可选
+	Limit        int   // 上限，1..1000
+	PageToken    int64 // 用 created_at 秒作分页游标；<=0 表示第一页
+}
+
+// ListTasksByUserPlatform returns tasks for a user filtered by platform/status/time.
+// 按 created_at DESC 排序；返回结果长度 <= Limit。nextPageToken 是最后一条的 created_at，
+// 客户端下次请求传 page_token=<该值> 即可翻页。
+func ListTasksByUserPlatform(q TaskListQuery) ([]*Task, int64, error) {
+	if q.Limit <= 0 || q.Limit > 1000 {
+		q.Limit = 20
+	}
+	db := DB.Where("user_id = ?", q.UserId)
+	if q.Platform != "" {
+		db = db.Where("platform = ?", q.Platform)
+	}
+	if len(q.StatusFilter) > 0 {
+		db = db.Where("status in (?)", q.StatusFilter)
+	}
+	if q.CreatedAfter > 0 {
+		db = db.Where("created_at >= ?", q.CreatedAfter)
+	}
+	if q.PageToken > 0 {
+		db = db.Where("created_at < ?", q.PageToken)
+	}
+	var tasks []*Task
+	if err := db.Order("created_at DESC").Limit(q.Limit).Find(&tasks).Error; err != nil {
+		return nil, 0, err
+	}
+	var next int64
+	if len(tasks) == q.Limit {
+		next = tasks[len(tasks)-1].CreatedAt
+	}
+	return tasks, next, nil
+}
+
 func GetByTaskIds(userId int, taskIds []any) ([]*Task, error) {
 	if len(taskIds) == 0 {
 		return nil, nil

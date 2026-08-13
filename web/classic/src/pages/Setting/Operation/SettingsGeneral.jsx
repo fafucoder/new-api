@@ -59,7 +59,6 @@ export default function GeneralSettings(props) {
     SelfUseModeEnabled: false,
     LandingPageEnabled: false,
     AssetLibraryEnabled: false,
-    VideoTaskPreConsumeEnabled: true,
     'token_setting.max_user_tokens': 1000,
   });
   const refForm = useRef();
@@ -411,19 +410,6 @@ export default function GeneralSettings(props) {
                   checkedText='｜'
                   uncheckedText='〇'
                   onChange={handleFieldChange('AssetLibraryEnabled')}
-                />
-              </Col>
-              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
-                <Form.Switch
-                  field={'VideoTaskPreConsumeEnabled'}
-                  label={t('视频生成预扣费')}
-                  extraText={t(
-                    '开启后提交前预扣，关闭后仅在视频生成成功后扣费',
-                  )}
-                  size='default'
-                  checkedText='｜'
-                  uncheckedText='〇'
-                  onChange={handleFieldChange('VideoTaskPreConsumeEnabled')}
                 />
               </Col>
             </Row>

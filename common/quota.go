@@ -1,5 +1,8 @@
 package common
 
 func GetTrustQuota() int {
-	return int(10 * QuotaPerUnit)
+	if PreConsumeTrustQuota < 0 {
+		return 0
+	}
+	return PreConsumeTrustQuota
 }

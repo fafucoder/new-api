@@ -290,6 +290,26 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 		if _, ok := c.Get("relay_mode"); !ok {
 			c.Set("relay_mode", relayMode)
 		}
+	} else if strings.HasPrefix(c.Request.URL.Path, "/api/v3/contents/generations/tasks") {
+		// 火山原生视频接口：POST create / GET fetch / DELETE cancel
+		relayMode := relayconstant.RelayModeUnknown
+		switch c.Request.Method {
+		case http.MethodPost:
+			relayMode = relayconstant.RelayModeVideoSubmit
+			req, err := getModelFromRequest(c)
+			if err != nil {
+				return nil, false, err
+			}
+			if req != nil {
+				modelRequest.Model = req.Model
+			}
+		case http.MethodGet:
+			relayMode = relayconstant.RelayModeVideoFetchByID
+			shouldSelectChannel = false
+		case http.MethodDelete:
+			shouldSelectChannel = false
+		}
+		c.Set("relay_mode", relayMode)
 	} else if strings.HasPrefix(c.Request.URL.Path, "/v1beta/models/") || strings.HasPrefix(c.Request.URL.Path, "/v1/models/") {
 		// Gemini API 路径处理: /v1beta/models/gemini-2.0-flash:generateContent
 		relayMode := relayconstant.RelayModeGemini

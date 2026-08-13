@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -295,6 +296,13 @@ func (a *TaskAdaptor) DoResponse(c *gin.Context, resp *http.Response, info *rela
 		return "", nil, service.TaskErrorWrapper(fmt.Errorf("task_id is empty, body: %s", responseBody), "invalid_response", http.StatusInternalServerError)
 	}
 
+	// 火山原生入口：只返回 {"id": "<task_id>"}
+	if strings.HasPrefix(c.Request.RequestURI, "/api/v3/contents/generations/tasks") {
+		c.JSON(http.StatusOK, gin.H{"id": info.PublicTaskID})
+		return mResp.ID, responseBody, nil
+	}
+
+	// OpenAI /v1/videos 兼容入口：返回 OpenAIVideo
 	ov := dto.NewOpenAIVideo()
 	ov.ID = info.PublicTaskID
 	ov.TaskID = info.PublicTaskID
@@ -419,6 +427,39 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	return common.Marshal(ov)
 }
 
+// ConvertToVolcVideo 输出火山原生视频任务响应体（GET /api/v3/contents/generations/tasks/{id}）。
+// 使用本地存的 originTask.Data（就是最近一次上游返回体）并覆盖 id 为本地 TaskID，
+// 状态字段按火山官方枚举（queued/running/succeeded/failed）输出。
+func (a *TaskAdaptor) ConvertToVolcVideo(originTask *model.Task) ([]byte, error) {
+	var dResp responseTask
+	if len(originTask.Data) > 0 {
+		if err := common.Unmarshal(originTask.Data, &dResp); err != nil {
+			return nil, errors.Wrap(err, "unmarshal maas task data failed")
+		}
+	}
+	dResp.ID = originTask.TaskID
+	if dResp.Status == "" {
+		dResp.Status = mapTaskStatusToVolc(originTask.Status)
+	}
+	return common.Marshal(dResp)
+}
+
+// mapTaskStatusToVolc 把本地任务状态映射到火山官方枚举。
+func mapTaskStatusToVolc(s model.TaskStatus) string {
+	switch s {
+	case model.TaskStatusQueued, model.TaskStatusSubmitted, model.TaskStatusNotStart:
+		return "queued"
+	case model.TaskStatusInProgress:
+		return "running"
+	case model.TaskStatusSuccess:
+		return "succeeded"
+	case model.TaskStatusFailure:
+		return "failed"
+	default:
+		return "queued"
+	}
+}
+
 func (a *TaskAdaptor) GetModelList() []string { return ModelList }
 func (a *TaskAdaptor) GetChannelName() string { return ChannelName }
 
@@ -481,6 +522,50 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, re
 
 	_ = taskcommon.UnmarshalMetadata(req.Metadata, r)
 
+	// 1) 顶层 content 若客户端直接以火山原生格式提交，直接反序列化到 r.Content
+	if len(r.Content) == 0 && len(req.Content) > 0 {
+		var items []ContentItem
+		if err := common.Unmarshal(req.Content, &items); err == nil {
+			r.Content = items
+		}
+	}
+
+	// 2) 顶层火山字段兜底
+	if r.Resolution == "" {
+		r.Resolution = req.Resolution
+	}
+	if r.Ratio == "" {
+		r.Ratio = req.Ratio
+	}
+	if r.Duration == nil && req.Duration > 0 {
+		d := req.Duration
+		r.Duration = &d
+	}
+	if r.GenerateAudio == nil && req.GenerateAudio != nil {
+		r.GenerateAudio = req.GenerateAudio
+	}
+	if r.Watermark == nil && req.Watermark != nil {
+		r.Watermark = req.Watermark
+	}
+
+	// 3) OpenAI /v1/videos 格式（size / seconds）映射到火山字段
+	if r.Resolution == "" || r.Ratio == "" {
+		if resolution, ratio, ok := parseOpenAISize(req.Size); ok {
+			if r.Resolution == "" {
+				r.Resolution = resolution
+			}
+			if r.Ratio == "" {
+				r.Ratio = ratio
+			}
+		}
+	}
+	if r.Duration == nil && req.Seconds != "" {
+		if d, err := strconv.Atoi(strings.TrimSpace(req.Seconds)); err == nil && d > 0 {
+			r.Duration = &d
+		}
+	}
+
+	// 4) 兜底：如果 content 里没有文本项，把 prompt 塞进去
 	hasText := false
 	for _, item := range r.Content {
 		if item.Type == "text" {
@@ -492,11 +577,64 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq, re
 		r.Content = append(r.Content, ContentItem{Type: "text", Text: req.Prompt})
 	}
 
-	if req.Duration > 0 {
-		r.Duration = &req.Duration
+	return r
+}
+
+// parseOpenAISize 把 OpenAI 视频 API 的 size 字段（如 "1280x720"）映射到
+// 火山的 resolution + ratio。识别失败时 ok=false。
+//
+// resolution 由较短边决定（火山文档：480p/720p/1080p/4k 对应短边像素）。
+// ratio 由 (宽,高) 归约后的最简比得到，缺省 16:9。
+func parseOpenAISize(size string) (resolution, ratio string, ok bool) {
+	s := strings.TrimSpace(strings.ToLower(size))
+	if s == "" {
+		return "", "", false
+	}
+	parts := strings.Split(s, "x")
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	w, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	h, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil || w <= 0 || h <= 0 {
+		return "", "", false
 	}
 
-	return r
+	short := w
+	if h < short {
+		short = h
+	}
+	switch {
+	case short <= 480:
+		resolution = "480p"
+	case short <= 720:
+		resolution = "720p"
+	case short <= 1080:
+		resolution = "1080p"
+	default:
+		resolution = "4k"
+	}
+
+	g := gcd(w, h)
+	rw, rh := w/g, h/g
+	// 归一常见比例
+	switch fmt.Sprintf("%d:%d", rw, rh) {
+	case "16:9", "9:16", "4:3", "3:4", "1:1", "21:9", "9:21":
+		ratio = fmt.Sprintf("%d:%d", rw, rh)
+	default:
+		ratio = "16:9"
+	}
+	return resolution, ratio, true
+}
+
+func gcd(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	if a < 0 {
+		return -a
+	}
+	return a
 }
 
 func hasVideoInput(content []ContentItem) bool {

@@ -150,6 +150,11 @@ var AutomaticEnableChannelEnabled = false
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
 
+// PreConsumeTrustQuota 预扣费信任阈值：当用户余额（且令牌余额）严格大于该值时，
+// 跳过预扣费；小于或等于时按 PreConsumedQuota 走预扣。设为 0 表示始终预扣。
+// 默认 10 × QuotaPerUnit（约 10 美元），保持历史行为。
+var PreConsumeTrustQuota = 10 * int(QuotaPerUnit)
+
 var RetryTimes = 0
 
 //var RootUserEmail = ""

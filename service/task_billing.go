@@ -338,6 +338,10 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 	var logQuota int
 	model.UpdateUserUsedQuota(task.UserId, quotaDelta)
 	model.UpdateChannelUsedQuota(task.ChannelId, quotaDelta)
+	// 延迟计费任务在提交时未累加请求计数，此处补上。
+	if bc := task.PrivateData.BillingContext; bc != nil && bc.DeferredBilling && preConsumedQuota == 0 && quotaDelta > 0 {
+		model.UpdateUserRequestCount(task.UserId, 1)
+	}
 	if username, err := model.GetUsernameById(task.UserId, false); err == nil {
 		model.IncreaseQuotaDataQuota(task.UserId, username, taskModelName(task), task.SubmitTime, quotaDelta)
 	}

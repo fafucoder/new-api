@@ -784,7 +784,10 @@ func RelayTask(c *gin.Context) {
 		} else if settleErr := service.SettleBilling(c, relayInfo, result.Quota); settleErr != nil {
 			common.SysError("settle task billing error: " + settleErr.Error())
 		}
-		service.LogTaskConsumption(c, relayInfo, initialQuota)
+		// 延迟计费任务在完成时才写消费日志和累加请求计数，提交阶段不写。
+		if !result.DeferredBilling {
+			service.LogTaskConsumption(c, relayInfo, initialQuota)
+		}
 
 		task := model.InitTask(result.Platform, relayInfo)
 		// 记录用户提示词到 Properties.Input —— 前端历史列表用它显示原始提问。

@@ -1327,6 +1327,27 @@ function renderBillingArticle(lines, { showReferenceNote = true } = {}) {
   );
 }
 
+// 把内部档位标签（如 "video|720p|0|default"）翻译成可读文案：
+// "视频 720p · 无参考视频 · 默认档"。非视频标签保持原样。
+function formatMatchedTierLabel(rawLabel) {
+  if (!rawLabel) return rawLabel;
+  const parts = String(rawLabel).split('|');
+  if (parts.length < 3 || parts[0] !== 'video') return rawLabel;
+
+  const resolution = parts[1];
+  const hasReference = parts[2] === '1';
+  const isDefault = parts.length >= 4 && parts[3] === 'default';
+
+  const segments = [
+    i18next.t('视频 {{resolution}}', { resolution }),
+    hasReference ? i18next.t('含参考视频') : i18next.t('无参考视频'),
+  ];
+  if (isDefault) {
+    segments.push(i18next.t('默认档'));
+  }
+  return segments.join(' · ');
+}
+
 // Shared core for simple price rendering (used by OpenAI-like and Claude-like variants)
 function renderPriceSimpleCore({
                                  modelRatio,
@@ -2367,12 +2388,21 @@ export function renderTieredModelPrice(opts) {
       .filter((v) => v.group !== 'cache' || hasAnyCacheTokens)
       .map((v) => [v.field, v.label]);
 
+  const isVideoTier = String(matchedTier || '').startsWith('video|');
+  const relabel = (field, label) => {
+    // 视频阶梯计费里 c 变量含义不是"补全"，改成更贴切的"视频计费单价"
+    if (isVideoTier && field === 'outputPrice') {
+      return i18next.t('视频计费单价');
+    }
+    return label;
+  };
+
   const lines = [
-    buildBillingText('命中档位：{{tier}}', { tier: matchedTier || tier.label }),
+    buildBillingText('命中档位：{{tier}}', { tier: formatMatchedTierLabel(matchedTier) || tier.label }),
     ...priceLines
         .filter(([field]) => tier[field] > 0)
         .map(([field, label]) =>
-            buildBillingPriceText(`${label}：{{symbol}}{{price}} / 1M tokens`, { symbol, usdAmount: tier[field], rate }),
+            buildBillingPriceText(`${relabel(field, label)}：{{symbol}}{{price}} / 1M tokens`, { symbol, usdAmount: tier[field], rate }),
         ),
   ];
 

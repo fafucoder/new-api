@@ -698,6 +698,25 @@ type TaskSubmitReq struct {
 	Seconds        string                 `json:"seconds,omitempty"`
 	InputReference string                 `json:"input_reference,omitempty"`
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+
+	// 火山原生视频生成字段（POST /api/v3/contents/generations/tasks 或 /v1/videos 走火山格式时使用）。
+	// 与 OpenAI 格式的 size/seconds 互补：优先取火山字段，缺失时由 adaptor 从 size/seconds 换算。
+	Content          json.RawMessage `json:"content,omitempty"`
+	Resolution       string          `json:"resolution,omitempty"`
+	Ratio            string          `json:"ratio,omitempty"`
+	Frames           int             `json:"frames,omitempty"`
+	Seed             *int            `json:"seed,omitempty"`
+	GenerateAudio    *bool           `json:"generate_audio,omitempty"`
+	Watermark        *bool           `json:"watermark,omitempty"`
+	CameraFixed      *bool           `json:"camera_fixed,omitempty"`
+	CallbackURL      string          `json:"callback_url,omitempty"`
+	ReturnLastFrame  *bool           `json:"return_last_frame,omitempty"`
+	ServiceTier      string          `json:"service_tier,omitempty"`
+	SafetyIdentifier string          `json:"safety_identifier,omitempty"`
+	Priority         *int            `json:"priority,omitempty"`
+	Draft            *bool           `json:"draft,omitempty"`
+	Tools            json.RawMessage `json:"tools,omitempty"`
+	ExecutionExpiresAfter *int       `json:"execution_expires_after,omitempty"`
 }
 
 func (t *TaskSubmitReq) GetPrompt() string {

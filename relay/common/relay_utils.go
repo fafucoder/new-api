@@ -1,6 +1,7 @@
 package common
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -210,6 +211,11 @@ func ValidateBasicTaskRequest(c *gin.Context, info *RelayInfo, action string) *d
 		return createTaskError(err, "invalid_request", http.StatusBadRequest, true)
 	}
 
+	// 火山原生格式无顶层 prompt，文本放在 content[0].text — 抽出来当 prompt 使用。
+	if strings.TrimSpace(req.Prompt) == "" && len(req.Content) > 0 {
+		req.Prompt = extractPromptFromContent(req.Content)
+	}
+
 	if taskErr := validatePrompt(req.Prompt); taskErr != nil {
 		return taskErr
 	}
@@ -221,4 +227,22 @@ func ValidateBasicTaskRequest(c *gin.Context, info *RelayInfo, action string) *d
 
 	storeTaskRequest(c, info, action, req)
 	return nil
+}
+
+// extractPromptFromContent 从 content 数组里挑出第一个 type=text 的 text 值。
+// 兼容形如 [{"type":"text","text":"..."}] 的结构；解析失败返回空串。
+func extractPromptFromContent(raw json.RawMessage) string {
+	var items []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if err := common.Unmarshal(raw, &items); err != nil {
+		return ""
+	}
+	for _, item := range items {
+		if item.Type == "text" && strings.TrimSpace(item.Text) != "" {
+			return item.Text
+		}
+	}
+	return ""
 }

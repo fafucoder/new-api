@@ -34,6 +34,7 @@ export default function SettingsCreditLimit(props) {
   const [inputs, setInputs] = useState({
     QuotaForNewUser: '',
     PreConsumedQuota: '',
+    PreConsumeTrustQuota: '',
     QuotaForInviter: '',
     QuotaForInvitee: '',
     'quota_setting.enable_free_model_pre_consume': true,
@@ -132,6 +133,27 @@ export default function SettingsCreditLimit(props) {
               </Col>
               <Col xs={24} sm={12} md={8} lg={8} xl={8}>
                 <Form.InputNumber
+                  label={t('预扣费信任阈值')}
+                  field={'PreConsumeTrustQuota'}
+                  step={1}
+                  min={0}
+                  suffix={'Token'}
+                  extraText={t(
+                    '用户余额高于该阈值时跳过预扣费；低于或等于则按“请求预扣费额度”预扣。设为 0 表示始终预扣。默认 5000000（约 10 美元）',
+                  )}
+                  placeholder={'5000000'}
+                  onChange={(value) =>
+                    setInputs({
+                      ...inputs,
+                      PreConsumeTrustQuota: String(value),
+                    })
+                  }
+                />
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
+                <Form.InputNumber
                   label={t('邀请新用户奖励额度')}
                   field={'QuotaForInviter'}
                   step={1}
@@ -147,9 +169,7 @@ export default function SettingsCreditLimit(props) {
                   }
                 />
               </Col>
-            </Row>
-            <Row>
-              <Col xs={24} sm={12} md={8} lg={8} xl={6}>
+              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
                 <Form.InputNumber
                   label={t('新用户使用邀请码奖励额度')}
                   field={'QuotaForInvitee'}

@@ -31,6 +31,18 @@ func SetVideoRouter(router *gin.Engine) {
 		videoV1Router.GET("/videos/:task_id", controller.RelayTaskFetch)
 	}
 
+	// 火山原生 API 路由（与 OpenAI 兼容入口并存）
+	// docs: https://docs.jieyun.cc/zh/docs/volcengine/create
+	volcArkRouter := router.Group("/api/v3")
+	volcArkRouter.Use(middleware.RouteTag("relay"))
+	volcArkRouter.Use(middleware.TokenAuth(), middleware.Distribute())
+	{
+		volcArkRouter.POST("/contents/generations/tasks", controller.RelayTask)
+		volcArkRouter.GET("/contents/generations/tasks", controller.RelayVolcTaskList)
+		volcArkRouter.GET("/contents/generations/tasks/:task_id", controller.RelayTaskFetch)
+		volcArkRouter.DELETE("/contents/generations/tasks/:task_id", controller.RelayVolcTaskCancel)
+	}
+
 	klingV1Router := router.Group("/kling/v1")
 	klingV1Router.Use(middleware.RouteTag("relay"))
 	klingV1Router.Use(middleware.KlingRequestConvert(), middleware.TokenAuth(), middleware.Distribute())

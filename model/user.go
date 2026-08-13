@@ -1026,6 +1026,19 @@ func updateUserRequestCount(id int, count int) {
 	}
 }
 
+// UpdateUserRequestCount 仅递增 request_count（不改 used_quota），用于延迟计费任务
+// 在提交阶段没有累加请求计数，需要在任务完成结算时补上的场景。
+func UpdateUserRequestCount(id int, count int) {
+	if count == 0 {
+		return
+	}
+	if common.BatchUpdateEnabled {
+		addNewRecord(BatchUpdateTypeRequestCount, id, count)
+		return
+	}
+	updateUserRequestCount(id, count)
+}
+
 // GetUsernameById gets username from Redis first, falls back to DB if needed
 func GetUsernameById(id int, fromDB bool) (username string, err error) {
 	defer func() {

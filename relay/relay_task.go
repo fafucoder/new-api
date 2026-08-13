@@ -20,7 +20,6 @@ import (
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/gin-gonic/gin"
 )
 
@@ -215,13 +214,8 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		}
 	}
 
-	// 7. 预扣费（仅首次 — 重试时 info.Billing 已存在，跳过）。视频任务可由运营
-	// 设置改为完成后扣费；其他异步任务保持原行为。
-	deferredBilling := info.Billing == nil &&
-		!info.PriceData.FreeModel &&
-		info.RelayMode == relayconstant.RelayModeVideoSubmit &&
-		!operation_setting.VideoTaskPreConsumeEnabled
-	if info.Billing == nil && !info.PriceData.FreeModel && !deferredBilling {
+	// 7. 预扣费（仅首次 — 重试时 info.Billing 已存在，跳过）。
+	if info.Billing == nil && !info.PriceData.FreeModel {
 		info.ForcePreConsume = true
 		if apiErr := service.PreConsumeBilling(c, info.PriceData.Quota, info); apiErr != nil {
 			return nil, service.TaskErrorFromAPIError(apiErr)
@@ -272,7 +266,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		TaskData:        taskData,
 		Platform:        platform,
 		Quota:           finalQuota,
-		DeferredBilling: deferredBilling,
+		DeferredBilling: false,
 	}, nil
 }
 
@@ -396,10 +390,31 @@ func videoFetchByIDRespBodyBuilder(c *gin.Context) (respBody []byte, taskResp *d
 	}
 
 	isOpenAIVideoAPI := strings.HasPrefix(c.Request.RequestURI, "/v1/videos/")
+	isVolcVideoAPI := strings.HasPrefix(c.Request.RequestURI, "/api/v3/contents/generations/tasks/")
 
 	// Gemini/Vertex 支持实时查询：用户 fetch 时直接从上游拉取最新状态
 	if realtimeResp := tryRealtimeFetch(originTask, isOpenAIVideoAPI); len(realtimeResp) > 0 {
 		respBody = realtimeResp
+		return
+	}
+
+	// 火山原生格式：走 adaptor.ConvertToVolcVideo
+	if isVolcVideoAPI {
+		adaptor := GetTaskAdaptor(originTask.Platform)
+		if adaptor == nil {
+			taskResp = service.TaskErrorWrapperLocal(fmt.Errorf("invalid channel id: %d", originTask.ChannelId), "invalid_channel_id", http.StatusBadRequest)
+			return
+		}
+		if converter, ok := adaptor.(channel.VolcVideoConverter); ok {
+			volcData, err := converter.ConvertToVolcVideo(originTask)
+			if err != nil {
+				taskResp = service.TaskErrorWrapper(err, "convert_to_volc_video_failed", http.StatusInternalServerError)
+				return
+			}
+			respBody = volcData
+			return
+		}
+		taskResp = service.TaskErrorWrapperLocal(fmt.Errorf("not_implemented:%s", originTask.Platform), "not_implemented", http.StatusNotImplemented)
 		return
 	}
 
