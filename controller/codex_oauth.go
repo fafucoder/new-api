@@ -160,7 +160,12 @@ func completeCodexOAuthWithChannelID(c *gin.Context, channelID int) {
 			c.JSON(http.StatusOK, gin.H{"success": false, "message": "channel type is not Codex"})
 			return
 		}
-		channelProxy = ch.GetSetting().Proxy
+		proxyURL, err := model.ResolveChannelProxy(ch.ProxyId)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+			return
+		}
+		channelProxy = proxyURL
 	}
 
 	session := sessions.Default(c)

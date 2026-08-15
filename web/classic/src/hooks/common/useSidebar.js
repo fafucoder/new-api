@@ -50,6 +50,7 @@ export const DEFAULT_ADMIN_CONFIG = {
   admin: {
     enabled: true,
     channel: true,
+    proxy: true,
     models: true,
     deployment: true,
     redemption: true,

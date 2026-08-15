@@ -287,6 +287,7 @@ func migrateDB() error {
 		&BalanceAlertRule{},
 		&ErrorRateAlertRule{},
 		&Invoice{},
+		&Proxy{},
 	)
 	if err != nil {
 		return err
@@ -341,6 +342,7 @@ func migrateDBFast() error {
 		{&BalanceAlertRule{}, "BalanceAlertRule"},
 		{&ErrorRateAlertRule{}, "ErrorRateAlertRule"},
 		{&Invoice{}, "Invoice"},
+		{&Proxy{}, "Proxy"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))

@@ -54,6 +54,7 @@ type Channel struct {
 
 	OtherSettings string `json:"settings" gorm:"column:settings"` // 其他设置，存储azure版本等不需要检索的信息，详见dto.ChannelOtherSettings
 	IsFallback    *bool   `json:"is_fallback" gorm:"default:false"` // 是否为兜底渠道
+	ProxyId       *int    `json:"proxy_id" gorm:"index;default:0"`  // 引用 proxies.id，0/nil 表示不使用代理
 
 	// cache info
 	Keys []string `json:"-" gorm:"-"`
@@ -549,6 +550,13 @@ func (channel *Channel) Update() error {
 	err = DB.Model(channel).Updates(channel).Error
 	if err != nil {
 		return err
+	}
+	// GORM Updates 会跳过零值/nil 字段，所以对可清空的指针字段需要显式处理。
+	// 当 ProxyId 为 nil 或 0 时，显式把 DB 中的 proxy_id 清零，避免"取消代理"保存后仍保留旧代理。
+	if channel.ProxyId == nil || *channel.ProxyId == 0 {
+		if err := DB.Model(&Channel{}).Where("id = ?", channel.Id).Update("proxy_id", 0).Error; err != nil {
+			return err
+		}
 	}
 	DB.Model(channel).First(channel, "id = ?", channel.Id)
 	err = channel.UpdateAbilities(nil)

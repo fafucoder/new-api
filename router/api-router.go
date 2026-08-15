@@ -280,6 +280,18 @@ func SetApiRouter(router *gin.Engine) {
 			ratioSyncRoute.GET("/channels", controller.GetSyncableChannels)
 			ratioSyncRoute.POST("/fetch", controller.FetchUpstreamRatios)
 		}
+		proxyRoute := apiRouter.Group("/proxy")
+		proxyRoute.Use(middleware.AdminAuth())
+		{
+			proxyRoute.GET("/", controller.GetAllProxies)
+			proxyRoute.GET("/options", controller.GetProxyOptions)
+			proxyRoute.GET("/:id", controller.GetProxy)
+			proxyRoute.POST("/", controller.AddProxy)
+			proxyRoute.PUT("/", controller.UpdateProxy)
+			proxyRoute.DELETE("/:id", controller.DeleteProxy)
+			proxyRoute.POST("/:id/test", controller.TestProxy)
+			proxyRoute.GET("/:id/channels", controller.GetProxyReferences)
+		}
 		channelRoute := apiRouter.Group("/channel")
 		channelRoute.Use(middleware.AdminAuth())
 		{

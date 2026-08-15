@@ -74,6 +74,7 @@ type ChannelMeta struct {
 	HeadersOverride      map[string]interface{}
 	ChannelSetting       dto.ChannelSettings
 	ChannelOtherSettings dto.ChannelOtherSettings
+	RuntimeProxyURL      string
 	UpstreamModelName    string
 	IsModelMapped        bool
 	SupportStreamOptions bool // 是否支持流式选项
@@ -219,6 +220,8 @@ func (info *RelayInfo) InitChannelMeta(c *gin.Context) {
 	if ok {
 		channelMeta.ChannelOtherSettings = channelOtherSettings
 	}
+
+	channelMeta.RuntimeProxyURL = common.GetContextKeyString(c, constant.ContextKeyRuntimeProxyURL)
 
 	if streamSupportedChannels[channelMeta.ChannelType] {
 		channelMeta.SupportStreamOptions = true

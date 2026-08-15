@@ -172,6 +172,21 @@ export const useChannelsData = () => {
     fetchGlobalPassThroughEnabled().then();
   }, []);
 
+  useEffect(() => {
+    if (!formApi) return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const kw = params.get('keyword');
+      if (kw) {
+        formApi.setValues({ ...formInitValues, searchKeyword: kw }, {
+          isOverride: true,
+        });
+        searchChannels(enableTagMode);
+      }
+    } catch (_) {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formApi]);
+
   // Column visibility management
   const getDefaultColumnVisibility = () => {
     return {

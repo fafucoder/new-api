@@ -69,6 +69,7 @@ import ChannelKeyDisplay from '../../../common/ui/ChannelKeyDisplay';
 import { useSecureVerification } from '../../../../hooks/common/useSecureVerification';
 import { parseChannelConnectionString } from '../../../../helpers/token';
 import { createApiCalls } from '../../../../services/secureVerification';
+import { getProxyOptions } from '../../../../services/proxy';
 import {
   collectInvalidStatusCodeEntries,
   collectNewDisallowedStatusCodeRedirects,
@@ -191,12 +192,13 @@ const EditChannelModal = (props) => {
     // 渠道额外设置的默认值
     force_format: false,
     thinking_to_content: false,
-    proxy: '',
     pass_through_body_enabled: false,
     system_prompt: '',
     system_prompt_override: false,
     disable_probe: false,
     support_4k: false,
+    // 代理引用（Proxy 管理）
+    proxy_id: null,
     responses_to_chat_enabled: false,
     unify_model_name: false,
     kimi_convert: false,
@@ -520,7 +522,6 @@ const EditChannelModal = (props) => {
   const [channelSettings, setChannelSettings] = useState({
     force_format: false,
     thinking_to_content: false,
-    proxy: '',
     pass_through_body_enabled: false,
     system_prompt: '',
     disable_probe: false,
@@ -530,7 +531,28 @@ const EditChannelModal = (props) => {
     kimi_convert: false,
     n_fanout_enabled: false,
   });
-  const showApiConfigCard = true; // 控制是否显示 API 配置卡片
+  const [proxyOptions, setProxyOptions] = useState([]);
+  const [proxyOptionsLoading, setProxyOptionsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setProxyOptionsLoading(true);
+    getProxyOptions({ onlyEnabled: true })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.data?.success) {
+          setProxyOptions(res.data.data || []);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setProxyOptionsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const showApiConfigCard = true;
   const getInitValues = () => ({ ...originInputs });
 
   // 处理渠道额外设置的更新
@@ -876,7 +898,6 @@ const EditChannelModal = (props) => {
           data.force_format = parsedSettings.force_format || false;
           data.thinking_to_content =
             parsedSettings.thinking_to_content || false;
-          data.proxy = parsedSettings.proxy || '';
           data.pass_through_body_enabled =
             parsedSettings.pass_through_body_enabled || false;
           data.system_prompt = parsedSettings.system_prompt || '';
@@ -893,7 +914,6 @@ const EditChannelModal = (props) => {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
           data.thinking_to_content = false;
-          data.proxy = '';
           data.pass_through_body_enabled = false;
           data.system_prompt = '';
           data.system_prompt_override = false;
@@ -907,7 +927,6 @@ const EditChannelModal = (props) => {
       } else {
         data.force_format = false;
         data.thinking_to_content = false;
-        data.proxy = '';
         data.pass_through_body_enabled = false;
         data.system_prompt = '';
         data.system_prompt_override = false;
@@ -1006,6 +1025,10 @@ const EditChannelModal = (props) => {
       }
 
       initialBaseUrlRef.current = data.base_url || '';
+      // 后端 proxy_id 为 0/null 时归一为 null，避免 Semi Select 直接展示 "0"
+      if (!data.proxy_id || data.proxy_id === 0) {
+        data.proxy_id = null;
+      }
       setInputs(data);
       if (formApiRef.current) {
         formApiRef.current.setValues(data);
@@ -1022,7 +1045,6 @@ const EditChannelModal = (props) => {
       setChannelSettings({
         force_format: data.force_format,
         thinking_to_content: data.thinking_to_content,
-        proxy: data.proxy,
         pass_through_body_enabled: data.pass_through_body_enabled,
         system_prompt: data.system_prompt,
         system_prompt_override: data.system_prompt_override || false,
@@ -1067,7 +1089,7 @@ const EditChannelModal = (props) => {
         (data.remark && data.remark.trim()) ||
         (data.priority && data.priority !== 0) ||
         (data.weight && data.weight !== 0) ||
-        (data.proxy && data.proxy.trim()) ||
+        (data.proxy_id && data.proxy_id !== 0) ||
         (data.system_prompt && data.system_prompt.trim()) ||
         data.thinking_to_content ||
         data.pass_through_body_enabled ||
@@ -1421,7 +1443,6 @@ const EditChannelModal = (props) => {
     setChannelSettings({
       force_format: false,
       thinking_to_content: false,
-      proxy: '',
       pass_through_body_enabled: false,
       system_prompt: '',
       system_prompt_override: false,
@@ -1797,7 +1818,6 @@ const EditChannelModal = (props) => {
     const channelExtraSettings = {
       force_format: localInputs.force_format || false,
       thinking_to_content: localInputs.thinking_to_content || false,
-      proxy: localInputs.proxy || '',
       pass_through_body_enabled: localInputs.pass_through_body_enabled || false,
       system_prompt: localInputs.system_prompt || '',
       system_prompt_override: localInputs.system_prompt_override || false,
@@ -1884,7 +1904,6 @@ const EditChannelModal = (props) => {
     // 清理不需要发送到后端的字段
     delete localInputs.force_format;
     delete localInputs.thinking_to_content;
-    delete localInputs.proxy;
     delete localInputs.pass_through_body_enabled;
     delete localInputs.system_prompt;
     delete localInputs.system_prompt_override;
@@ -2606,7 +2625,19 @@ const EditChannelModal = (props) => {
                   <Form.Switch field='disable_probe' label={t('禁用探测')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('disable_probe', value)} extraText={t('开启后,批量"测试所有通道"和定时可用性探测将跳过此渠道')} />
                   <Form.Switch field='support_4k' label={t('渠道是否支持4K图片生成')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('support_4k', value)} extraText={t('勾选后，该渠道可处理高分辨率图片生成请求（根据系统设置的尺寸阈值判断）')} />
 
-                  <Form.Input field='proxy' label={t('代理地址')} placeholder={t('例如: socks5://user:pass@host:port')} onChange={(value) => handleChannelSettingsChange('proxy', value)} showClear extraText={t('用于配置网络代理，支持 socks5 协议')} />
+                  <Form.Select
+                    field='proxy_id'
+                    label={t('代理')}
+                    placeholder={t('不使用代理')}
+                    showClear
+                    style={{ width: '100%' }}
+                    loading={proxyOptionsLoading}
+                    optionList={proxyOptions.map((p) => ({
+                      label: `${p.name} (${p.type})`,
+                      value: p.id,
+                    }))}
+                    extraText={t('在 代理管理 中维护代理')}
+                  />
 
                   <Form.TextArea field='system_prompt' label={t('系统提示词')} placeholder={t('输入系统提示词，用户的系统提示词将优先于此设置')} onChange={(value) => handleChannelSettingsChange('system_prompt', value)} autosize showClear extraText={t('用户优先：如果用户在请求中指定了系统提示词，将优先使用用户的设置')} />
                   <Form.Switch field='system_prompt_override' label={t('系统提示词拼接')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('system_prompt_override', value)} extraText={t('如果用户请求中包含系统提示词，则使用此设置拼接到用户的系统提示词前面')} />

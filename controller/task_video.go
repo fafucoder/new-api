@@ -67,7 +67,10 @@ func updateVideoSingleTask(ctx context.Context, adaptor channel.TaskAdaptor, cha
 	if channel.GetBaseURL() != "" {
 		baseURL = channel.GetBaseURL()
 	}
-	proxy := channel.GetSetting().Proxy
+	proxy, err := model.ResolveChannelProxy(channel.ProxyId)
+	if err != nil {
+		return err
+	}
 
 	task := taskM[taskId]
 	if task == nil {
