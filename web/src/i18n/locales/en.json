@@ -5316,6 +5316,15 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Cache Hit Rate": "Cache Hit Rate",
+    "Request Hit Rate": "Request Hit Rate",
+    "Token Hit Rate": "Token Hit Rate",
+    "Cache Hit Rate Filters": "Cache Hit Rate Filters",
+    "Filter the cache hit rate view by time range, model, and channel.": "Filter the cache hit rate view by time range, model, and channel.",
+    "Filter by model name": "Filter by model name",
+    "All Channels": "All Channels",
+    "Model Name": "Model Name",
+    "Data Filters": "Data Filters"
   }
 }

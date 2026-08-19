@@ -5316,6 +5316,15 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Cache Hit Rate": "缓存命中率",
+    "Request Hit Rate": "请求命中率",
+    "Token Hit Rate": "Token 命中率",
+    "Cache Hit Rate Filters": "缓存命中率筛选",
+    "Filter the cache hit rate view by time range, model, and channel.": "按时间范围、模型和渠道筛选缓存命中率。",
+    "Filter by model name": "按模型名称筛选",
+    "All Channels": "全部渠道",
+    "Model Name": "模型名称",
+    "Data Filters": "数据筛选"
   }
 }

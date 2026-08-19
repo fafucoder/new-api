@@ -338,6 +338,8 @@ type RecordConsumeLogParams struct {
 	IsStream         bool                   `json:"is_stream"`
 	Group            string                 `json:"group"`
 	Other            map[string]interface{} `json:"other"`
+	CachedTokens     int                    `json:"cached_tokens"`
+	InputTokens      int                    `json:"input_tokens"`
 }
 
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
@@ -389,16 +391,18 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	}
 	if common.DataExportEnabled {
 		LogQuotaData(QuotaDataLogParams{
-			UserID:    userId,
-			Username:  username,
-			ModelName: params.ModelName,
-			Quota:     params.Quota,
-			CreatedAt: createdAt,
-			TokenUsed: params.PromptTokens + params.CompletionTokens,
-			UseGroup:  params.Group,
-			TokenID:   params.TokenId,
-			ChannelID: params.ChannelId,
-			NodeName:  common.NodeName,
+			UserID:       userId,
+			Username:     username,
+			ModelName:    params.ModelName,
+			Quota:        params.Quota,
+			CreatedAt:    createdAt,
+			TokenUsed:    params.PromptTokens + params.CompletionTokens,
+			UseGroup:     params.Group,
+			TokenID:      params.TokenId,
+			ChannelID:    params.ChannelId,
+			NodeName:     common.NodeName,
+			CachedTokens: params.CachedTokens,
+			InputTokens:  params.InputTokens,
 		})
 	}
 }

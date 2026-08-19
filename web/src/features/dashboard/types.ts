@@ -31,6 +31,10 @@ export interface QuotaDataItem {
   token_used?: number
   count?: number
   quota?: number
+  cache_hit_count?: number
+  cached_tokens?: number
+  input_tokens?: number
+  channel_id?: number
 }
 
 export interface FlowQuotaDataItem {
@@ -195,6 +199,16 @@ export type ConsumptionDistributionChartType = 'bar' | 'area'
 
 export type ModelAnalyticsChartTab = 'trend' | 'proportion' | 'top'
 
+export type CacheHitRateChartTab = 'request' | 'token'
+
+export interface CacheFilters {
+  start_timestamp?: Date
+  end_timestamp?: Date
+  time_granularity?: TimeGranularity
+  model_name?: string
+  channel_id?: number
+}
+
 export interface DashboardChartPreferences {
   consumptionDistributionChart: ConsumptionDistributionChartType
   modelAnalyticsChart: ModelAnalyticsChartTab
@@ -249,6 +263,11 @@ export interface ProcessedChartData {
 export interface ProcessedUserChartData {
   spec_user_rank: VChartSpec
   spec_user_trend: VChartSpec
+}
+
+export interface ProcessedCacheChartData {
+  spec_request_hit_rate: VChartSpec
+  spec_token_hit_rate: VChartSpec
 }
 
 // ============================================================================

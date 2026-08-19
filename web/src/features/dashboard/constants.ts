@@ -16,7 +16,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { DashboardChartPreferences, DashboardFilters } from './types'
+import type {
+  DashboardChartPreferences,
+  DashboardFilters,
+  CacheFilters,
+} from './types'
 
 export const TIME_GRANULARITY_STORAGE_KEY = 'data_export_default_time'
 export const DASHBOARD_CHART_PREFERENCES_STORAGE_KEY =
@@ -66,4 +70,17 @@ export const EMPTY_DASHBOARD_FILTERS: DashboardFilters = {
   end_timestamp: undefined,
   time_granularity: 'hour',
   username: '',
+}
+
+export const CACHE_HIT_RATE_CHART_OPTIONS = [
+  { value: 'request', labelKey: 'Request Hit Rate' },
+  { value: 'token', labelKey: 'Token Hit Rate' },
+] as const
+
+export const EMPTY_CACHE_FILTERS: CacheFilters = {
+  start_timestamp: undefined,
+  end_timestamp: undefined,
+  time_granularity: 'hour',
+  model_name: '',
+  channel_id: undefined,
 }

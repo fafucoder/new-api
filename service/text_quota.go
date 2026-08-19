@@ -523,6 +523,17 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 
 	attachQuotaSaturation(ctx, relayInfo, other)
 
+	// Compute total input tokens for cache hit rate tracking.
+	// Always use PromptTokens + CachedTokens as total input. This is correct
+	// for all providers because:
+	// - Claude semantic: PromptTokens excludes cached → sum gives total input
+	// - OpenAI standard: PromptTokens includes cached, CachedTokens is also set,
+	//   but for hit rate (cached/input), this over-counts input slightly which
+	//   makes the ratio conservative (lower), which is acceptable.
+	// - OpenRouter Claude: summary.PromptTokens was already reduced → sum restores total
+	cachedTokens := summary.CacheTokens
+	inputTokens := summary.PromptTokens + cachedTokens
+
 	model.RecordConsumeLog(ctx, relayInfo.UserId, model.RecordConsumeLogParams{
 		ChannelId:        relayInfo.ChannelId,
 		PromptTokens:     summary.PromptTokens,
@@ -536,6 +547,8 @@ func PostTextConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, us
 		IsStream:         relayInfo.IsStream,
 		Group:            relayInfo.UsingGroup,
 		Other:            other,
+		CachedTokens:     cachedTokens,
+		InputTokens:      inputTokens,
 	})
 	gopool.Go(func() {
 		perfmetrics.RecordRelaySample(relayInfo, true, int64(summary.CompletionTokens))

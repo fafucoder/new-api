@@ -113,6 +113,12 @@ const LazyFlowCharts = lazy(() =>
   }))
 )
 
+const LazyCacheCharts = lazy(() =>
+  import('./components/cache/cache-charts').then((m) => ({
+    default: m.CacheCharts,
+  }))
+)
+
 function LogStatCardsFallback() {
   return (
     <div className='overflow-hidden rounded-lg border'>
@@ -185,6 +191,9 @@ const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
   },
   flow: {
     titleKey: 'Flow',
+  },
+  cache: {
+    titleKey: 'Cache Hit Rate',
   },
   users: {
     titleKey: 'User Analytics',
@@ -407,6 +416,13 @@ export function Dashboard() {
                   filters={modelFilters}
                   sensitiveVisible={flowSensitiveVisible}
                 />
+              </Suspense>
+            </FadeIn>
+          )}
+          {activeSection === 'cache' && (
+            <FadeIn>
+              <Suspense fallback={<ModelChartsFallback />}>
+                <LazyCacheCharts />
               </Suspense>
             </FadeIn>
           )}

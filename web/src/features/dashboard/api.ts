@@ -91,3 +91,17 @@ export async function getUptimeStatus() {
   )
   return res.data
 }
+
+// Get cache hit rate data (admin only)
+export async function getCacheQuotaDates(params: {
+  start_timestamp: number
+  end_timestamp: number
+  model_name?: string
+  channel_id?: number
+}) {
+  const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
+    '/api/data/cache',
+    { params }
+  )
+  return res.data
+}
