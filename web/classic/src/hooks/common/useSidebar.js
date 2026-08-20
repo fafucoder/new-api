@@ -51,6 +51,8 @@ export const DEFAULT_ADMIN_CONFIG = {
   },
   admin: {
     enabled: true,
+    tutorial: true,
+    videoTutorial: true,
     channel: true,
     models: true,
     deployment: true,

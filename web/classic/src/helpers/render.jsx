@@ -87,6 +87,7 @@ import {
   FileText,
   TrendingUp,
   Film,
+  Video,
 } from 'lucide-react';
 import {
   SiAtlassian,
@@ -178,6 +179,8 @@ export function getLucideIcon(key, selected = false) {
     case 'invoice':
     case 'invoiceAdmin':
       return <FileText {...commonProps} color={iconColor} />;
+    case 'videoTutorial':
+      return <Video {...commonProps} color={iconColor} />;
     default:
       return <CircleUser {...commonProps} color={iconColor} />;
   }

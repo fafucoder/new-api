@@ -44,6 +44,7 @@ const routerMap = {
   setting: '/console/setting',
   about: '/about',
   tutorial: '/tutorial',
+  videoTutorial: '/video-tutorial',
   detail: '/console',
   pricing: '/pricing',
   task: '/console/task',
@@ -194,9 +195,16 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     to: '/tutorial',
   };
 
+  const videoTutorialItem = {
+    text: t('视频生成教程'),
+    itemKey: 'videoTutorial',
+    to: '/video-tutorial',
+  };
+
   const adminItems = useMemo(() => {
     const items = [
       tutorialItem,
+      videoTutorialItem,
       {
         text: t('渠道管理'),
         itemKey: 'channel',

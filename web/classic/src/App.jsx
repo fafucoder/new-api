@@ -57,6 +57,7 @@ const Landing = lazy(() => import('./pages/Landing'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const About = lazy(() => import('./pages/About'));
 const Tutorial = lazy(() => import('./pages/Tutorial'));
+const VideoTutorial = lazy(() => import('./pages/VideoTutorial'));
 const UserAgreement = lazy(() => import('./pages/UserAgreement'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const Status = lazy(() => import('./pages/Status'));
@@ -463,6 +464,14 @@ function App() {
           element={
             <Suspense fallback={<Loading></Loading>} key={location.pathname}>
               <Tutorial />
+            </Suspense>
+          }
+        />
+        <Route
+          path='/video-tutorial'
+          element={
+            <Suspense fallback={<Loading></Loading>} key={location.pathname}>
+              <VideoTutorial />
             </Suspense>
           }
         />
