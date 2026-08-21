@@ -189,22 +189,8 @@ const SiderBar = ({ onNavigate = () => {} }) => {
     return filteredItems;
   }, [t, isModuleVisible]);
 
-  const tutorialItem = {
-    text: t('使用教程'),
-    itemKey: 'tutorial',
-    to: '/tutorial',
-  };
-
-  const videoTutorialItem = {
-    text: t('视频生成教程'),
-    itemKey: 'videoTutorial',
-    to: '/video-tutorial',
-  };
-
   const adminItems = useMemo(() => {
     const items = [
-      tutorialItem,
-      videoTutorialItem,
       {
         text: t('渠道管理'),
         itemKey: 'channel',
