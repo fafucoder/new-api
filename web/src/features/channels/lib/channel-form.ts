@@ -214,6 +214,7 @@ export const channelFormSchema = z
       ),
     priority: z.number().optional(),
     weight: z.number().optional(),
+    channel_ratio: z.number().min(0).optional(),
     test_model: z.string().optional(),
     auto_ban: z.number().optional(),
     status: z.number(),
@@ -412,6 +413,7 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   model_mapping: '',
   priority: 0,
   weight: 0,
+  channel_ratio: 1,
   test_model: '',
   auto_ban: 1,
   status: CHANNEL_STATUS.ENABLED,
@@ -563,6 +565,7 @@ export function transformChannelToFormDefaults(
     model_mapping: channel.model_mapping || '',
     priority: channel.priority || 0,
     weight: channel.weight || 0,
+    channel_ratio: channel.channel_ratio ?? 1,
     test_model: channel.test_model || '',
     auto_ban: channel.auto_ban ?? 1,
     status: channel.status,
@@ -794,6 +797,8 @@ export function transformFormDataToCreatePayload(formData: ChannelFormValues): {
     model_mapping: formData.model_mapping || null,
     priority: formData.priority || null,
     weight: formData.weight || null,
+    channel_ratio:
+      formData.channel_ratio == null ? null : formData.channel_ratio,
     test_model: formData.test_model || null,
     auto_ban: formData.auto_ban ?? 1,
     status: formData.status,
@@ -857,6 +862,14 @@ export function transformFormDataToUpdatePayload(
   // Only include key if it was changed (not empty)
   if (formData.key && formData.key.trim()) {
     payload.key = formData.key
+  }
+
+  // Channel ratio (进货价) is a sensitive field: only super admins may change it.
+  // Always send the current form value (initialized from the existing channel)
+  // so an unchanged submit compares equal to the origin and is not flagged as a
+  // sensitive change for ChannelWrite-only admins.
+  if (formData.channel_ratio != null) {
+    payload.channel_ratio = formData.channel_ratio
   }
 
   // Clean up empty strings to null for optional fields

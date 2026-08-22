@@ -342,6 +342,37 @@ type RecordConsumeLogParams struct {
 	InputTokens      int                    `json:"input_tokens"`
 }
 
+// resolveChannelCost returns the channel cost ratio (进货价倍率) snapshot and the
+// computed cost quota for a consume log. cost = quota * channel_ratio, using the
+// saturating quota helper so an out-of-range product can never wrap negative.
+// A missing/unknown channel falls back to a ratio of 1.0 (cost == quota).
+func resolveChannelCost(channelId int, quota int) (ratio float64, costQuota int) {
+	ratio = 1.0
+	if channelId > 0 {
+		if channel, err := CacheGetChannel(channelId); err == nil && channel != nil {
+			ratio = channel.GetChannelRatio()
+		}
+	}
+	costQuota = common.QuotaFromFloat(float64(quota) * ratio)
+	return ratio, costQuota
+}
+
+// attachChannelCostToOther nests the channel cost snapshot under
+// other.admin_info so it is visible to admins in the log detail view and
+// stripped for non-admin users by formatUserLogs (which deletes admin_info).
+func attachChannelCostToOther(other map[string]interface{}, ratio float64, costQuota int) {
+	if other == nil {
+		return
+	}
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	if !ok || adminInfo == nil {
+		adminInfo = make(map[string]interface{})
+		other["admin_info"] = adminInfo
+	}
+	adminInfo["channel_ratio"] = ratio
+	adminInfo["channel_cost"] = costQuota
+}
+
 func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams) {
 	if !common.LogConsumeEnabled {
 		return
@@ -351,6 +382,16 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	createdAt := common.GetTimestamp()
+	// Channel cost (进货价): what this request actually cost us on the upstream
+	// channel = quota * channel_ratio. Stored per log (admin-only, under
+	// admin_info) and fed into the data dashboard aggregation. The ratio
+	// snapshot is captured now so later channel-ratio edits never rewrite
+	// historical cost.
+	channelRatio, costQuota := resolveChannelCost(params.ChannelId, params.Quota)
+	if params.Other == nil {
+		params.Other = make(map[string]interface{})
+	}
+	attachChannelCostToOther(params.Other, channelRatio, costQuota)
 	otherStr := common.MapToJsonStr(params.Other)
 	// 判断是否需要记录 IP
 	needRecordIp := false
@@ -403,6 +444,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 			NodeName:     common.NodeName,
 			CachedTokens: params.CachedTokens,
 			InputTokens:  params.InputTokens,
+			CostQuota:    costQuota,
 		})
 	}
 }
@@ -432,6 +474,13 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		}
 	}
 	createdAt := common.GetTimestamp()
+	channelRatio, costQuota := resolveChannelCost(params.ChannelId, params.Quota)
+	if params.LogType == LogTypeConsume {
+		if params.Other == nil {
+			params.Other = make(map[string]interface{})
+		}
+		attachChannelCostToOther(params.Other, channelRatio, costQuota)
+	}
 	log := &Log{
 		UserId:    params.UserId,
 		Username:  username,
@@ -465,6 +514,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 			TokenID:   params.TokenId,
 			ChannelID: params.ChannelId,
 			NodeName:  nodeName,
+			CostQuota: costQuota,
 		})
 	}
 }

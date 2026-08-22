@@ -35,6 +35,7 @@ export interface QuotaDataItem {
   cached_tokens?: number
   input_tokens?: number
   channel_id?: number
+  cost_quota?: number
 }
 
 export interface FlowQuotaDataItem {
@@ -248,7 +249,7 @@ export type PingStatusMap = Record<string, PingStatus>
 // ============================================================================
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type VChartSpec = Record<string, any>
+export type VChartSpec = Record<string, any>
 
 export interface ProcessedChartData {
   spec_pie: VChartSpec

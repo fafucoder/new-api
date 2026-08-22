@@ -272,14 +272,6 @@ export function LogsFilterToolbar<TData>(props: LogsFilterToolbarProps<TData>) {
           {props.actionStart}
           <Button
             type='button'
-            variant='outline'
-            onClick={props.onReset}
-            disabled={!props.hasActiveFilters}
-          >
-            {t('Reset')}
-          </Button>
-          <Button
-            type='button'
             onClick={props.onSearch}
             disabled={props.searchLoading}
           >
@@ -287,6 +279,14 @@ export function LogsFilterToolbar<TData>(props: LogsFilterToolbarProps<TData>) {
             {t('Search')}
           </Button>
           <DataTableViewOptions table={props.table} />
+          <Button
+            type='button'
+            variant='outline'
+            onClick={props.onReset}
+            disabled={!props.hasActiveFilters}
+          >
+            {t('Reset')}
+          </Button>
         </div>
       </div>
     </div>

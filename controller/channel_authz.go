@@ -2,6 +2,17 @@ package controller
 
 import "github.com/QuantumNous/new-api/model"
 
+// normalizedChannelRatio maps a channel ratio pointer to its effective value so
+// a nil (unset) ratio and an explicit 1.0 compare equal. This keeps a
+// ChannelWrite-only admin editing unrelated fields from being falsely flagged
+// as making a sensitive change when the form always sends the normalized ratio.
+func normalizedChannelRatio(ratio *float64) float64 {
+	if ratio == nil {
+		return 1.0
+	}
+	return *ratio
+}
+
 func channelHasSensitiveChanges(channel *PatchChannel, origin *model.Channel, requestData map[string]any) bool {
 	if _, ok := requestData["type"]; ok && channel.Type != origin.Type {
 		return true
@@ -31,6 +42,9 @@ func channelHasSensitiveChanges(channel *PatchChannel, origin *model.Channel, re
 		return true
 	}
 	if _, ok := requestData["key_mode"]; ok && channel.KeyMode != nil {
+		return true
+	}
+	if _, ok := requestData["channel_ratio"]; ok && normalizedChannelRatio(channel.ChannelRatio) != normalizedChannelRatio(origin.ChannelRatio) {
 		return true
 	}
 	// Fail closed: any field present in the request that is neither a known
@@ -71,6 +85,7 @@ var channelSensitiveFields = map[string]struct{}{
 	"other":               {},
 	"settings":            {},
 	"key_mode":            {},
+	"channel_ratio":       {},
 }
 
 // channelOperationalFields lists fields managed by operation endpoints instead

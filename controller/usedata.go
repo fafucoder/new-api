@@ -148,3 +148,23 @@ func GetCacheQuotaDates(c *gin.Context) {
 		"data":    dates,
 	})
 }
+
+// GetChannelCostDates returns per-channel cost (进货价) and sale price (售价)
+// aggregates for the data dashboard bar chart. Admin-only route.
+func GetChannelCostDates(c *gin.Context) {
+	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
+	if !ok {
+		return
+	}
+	channelID, _ := strconv.Atoi(c.Query("channel_id"))
+	dates, err := model.GetChannelCostData(startTimestamp, endTimestamp, channelID)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    dates,
+	})
+}

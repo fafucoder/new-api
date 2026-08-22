@@ -34,6 +34,7 @@ export {
 } from './api-info'
 export { processChartData, processUserChartData } from './charts'
 export { processCacheChartData } from './cache-charts'
+export { processChannelCostChartData } from './channel-cost-charts'
 export {
   buildDashboardFlowData,
   buildFlowSankeySpec,

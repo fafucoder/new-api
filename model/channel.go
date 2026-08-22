@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"strings"
 	"sync"
@@ -50,6 +51,11 @@ type Channel struct {
 	ParamOverride     *string `json:"param_override" gorm:"type:text"`
 	HeaderOverride    *string `json:"header_override" gorm:"type:text"`
 	Remark            *string `json:"remark" gorm:"type:varchar(255)" validate:"max=255"`
+	// ChannelRatio is the per-channel cost multiplier (进货价): the fraction of
+	// the user-facing charge that this channel actually costs us. cost =
+	// quota * ChannelRatio. Nil is normalized to 1.0 by the controller; no GORM
+	// default tag to avoid cross-DB float default normalization churn.
+	ChannelRatio *float64 `json:"channel_ratio"`
 	// add after v0.8.5
 	ChannelInfo ChannelInfo `json:"channel_info" gorm:"type:json"`
 
@@ -502,6 +508,20 @@ func (channel *Channel) GetWeight() int {
 		return 0
 	}
 	return int(*channel.Weight)
+}
+
+// GetChannelRatio returns the per-channel cost multiplier (进货价). A nil,
+// negative, or non-finite value falls back to 1.0 so cost accounting never
+// produces a negative or NaN figure.
+func (channel *Channel) GetChannelRatio() float64 {
+	if channel.ChannelRatio == nil {
+		return 1.0
+	}
+	ratio := *channel.ChannelRatio
+	if ratio < 0 || math.IsNaN(ratio) || math.IsInf(ratio, 0) {
+		return 1.0
+	}
+	return ratio
 }
 
 func (channel *Channel) GetBaseURL() string {

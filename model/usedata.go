@@ -26,6 +26,10 @@ type QuotaData struct {
 	CacheHitCount int    `json:"cache_hit_count" gorm:"default:0"`
 	CachedTokens  int    `json:"cached_tokens" gorm:"default:0"`
 	InputTokens   int    `json:"input_tokens" gorm:"default:0"`
+	// CostQuota is the channel cost (进货价) for these requests = quota *
+	// channel_ratio, aggregated the same way as Quota (售价). No GORM default tag
+	// to avoid cross-DB default churn; column added by AutoMigrate.
+	CostQuota int `json:"cost_quota" gorm:"default:0"`
 }
 
 type QuotaDataLogParams struct {
@@ -41,6 +45,7 @@ type QuotaDataLogParams struct {
 	NodeName     string
 	CachedTokens int
 	InputTokens  int
+	CostQuota    int
 }
 
 func UpdateQuotaData() {
@@ -78,6 +83,7 @@ func logQuotaDataCache(quotaData *QuotaData) {
 		cachedQuotaData.CacheHitCount += quotaData.CacheHitCount
 		cachedQuotaData.CachedTokens += quotaData.CachedTokens
 		cachedQuotaData.InputTokens += quotaData.InputTokens
+		cachedQuotaData.CostQuota += quotaData.CostQuota
 		quotaData = cachedQuotaData
 	}
 	CacheQuotaData[key] = quotaData
@@ -105,6 +111,7 @@ func LogQuotaData(params QuotaDataLogParams) {
 		CacheHitCount: cacheHitCount,
 		CachedTokens:  params.CachedTokens,
 		InputTokens:   params.InputTokens,
+		CostQuota:     params.CostQuota,
 	}
 
 	CacheQuotaDataLock.Lock()
@@ -150,6 +157,7 @@ func increaseQuotaData(quotaData *QuotaData) {
 			"cache_hit_count": gorm.Expr("cache_hit_count + ?", quotaData.CacheHitCount),
 			"cached_tokens":   gorm.Expr("cached_tokens + ?", quotaData.CachedTokens),
 			"input_tokens":    gorm.Expr("input_tokens + ?", quotaData.InputTokens),
+			"cost_quota":      gorm.Expr("cost_quota + ?", quotaData.CostQuota),
 		}).Error
 	if err != nil {
 		common.SysLog(fmt.Sprintf("increaseQuotaData error: %s", err))
@@ -212,5 +220,22 @@ func GetCacheQuotaData(startTime int64, endTime int64, modelName string, channel
 		tx = tx.Where("channel_id = ?", channelID)
 	}
 	err := tx.Group("model_name, channel_id, created_at").Find(&quotaDatas).Error
+	return quotaDatas, err
+}
+
+// GetChannelCostData aggregates per-channel sale price (售价 = quota) and cost
+// (进货价 = cost_quota) over the given time range, grouped by channel and hour
+// bucket. An optional channelID > 0 narrows to a single channel. The frontend
+// rolls the hourly buckets up into the requested time granularity and renders
+// one bar group per channel.
+func GetChannelCostData(startTime int64, endTime int64, channelID int) ([]*QuotaData, error) {
+	var quotaDatas []*QuotaData
+	tx := DB.Table("quota_data").
+		Select("channel_id, created_at, sum(count) as count, sum(quota) as quota, sum(cost_quota) as cost_quota").
+		Where("created_at >= ? and created_at <= ?", startTime, endTime)
+	if channelID > 0 {
+		tx = tx.Where("channel_id = ?", channelID)
+	}
+	err := tx.Group("channel_id, created_at").Find(&quotaDatas).Error
 	return quotaDatas, err
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -532,6 +533,16 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 			if v, ok := keyMap["account_id"]; !ok || v == nil || strings.TrimSpace(fmt.Sprintf("%v", v)) == "" {
 				return fmt.Errorf("Codex key JSON must include account_id")
 			}
+		}
+	}
+
+	// Channel ratio (进货价): a cost multiplier. Reject negative / non-finite
+	// values so downstream cost accounting can never produce a negative or NaN
+	// figure. Nil is left as-is and normalized to 1.0 at read time.
+	if channel.ChannelRatio != nil {
+		ratio := *channel.ChannelRatio
+		if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < 0 {
+			return fmt.Errorf("渠道倍率[channel ratio] 必须是不小于 0 的有限数值")
 		}
 	}
 

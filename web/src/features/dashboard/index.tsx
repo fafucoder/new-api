@@ -119,6 +119,12 @@ const LazyCacheCharts = lazy(() =>
   }))
 )
 
+const LazyChannelCostCharts = lazy(() =>
+  import('./components/channel-cost/channel-cost-charts').then((m) => ({
+    default: m.ChannelCostCharts,
+  }))
+)
+
 function LogStatCardsFallback() {
   return (
     <div className='overflow-hidden rounded-lg border'>
@@ -397,6 +403,13 @@ export function Dashboard() {
                   />
                 </Suspense>
               </FadeIn>
+              {isAdmin && (
+                <FadeIn delay={0.2}>
+                  <Suspense fallback={<ModelChartsFallback />}>
+                    <LazyChannelCostCharts filters={modelFilters} />
+                  </Suspense>
+                </FadeIn>
+              )}
             </>
           )}
           {activeSection === 'users' && (

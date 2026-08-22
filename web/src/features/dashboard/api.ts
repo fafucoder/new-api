@@ -105,3 +105,16 @@ export async function getCacheQuotaDates(params: {
   )
   return res.data
 }
+
+// Get per-channel cost (进货价) and sale price (售价) data (admin only)
+export async function getChannelCostDates(params: {
+  start_timestamp: number
+  end_timestamp: number
+  channel_id?: number
+}) {
+  const res = await api.get<{ success: boolean; data: QuotaDataItem[] }>(
+    '/api/data/channel_cost',
+    { params }
+  )
+  return res.data
+}

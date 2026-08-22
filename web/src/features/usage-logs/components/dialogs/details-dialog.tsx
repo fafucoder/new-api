@@ -393,6 +393,31 @@ function BillingBreakdown(props: {
     value: formatLogQuota(log.quota),
   })
 
+  // Billing process: a single reconstructed formula line placed right below the
+  // total, shown only for per-token billing (not per-call / tiered) with tokens.
+  // Mirrors the settlement math in service/text_quota.go:
+  // (input/1M * input_price + output/1M * output_price) * group_ratio.
+  if (!isPerCall && !isTieredExpr && other.model_ratio != null) {
+    const promptTokens = log.prompt_tokens || 0
+    const completionTokens = log.completion_tokens || 0
+    if (promptTokens > 0 || completionTokens > 0) {
+      const outputUSD =
+        baseInputUSD *
+        (other.completion_ratio != null && Number.isFinite(other.completion_ratio)
+          ? other.completion_ratio
+          : 1)
+      const groupRatio =
+        effectiveGR != null && Number.isFinite(effectiveGR) ? effectiveGR : 1
+      const groupRatioLabel = isUserGR
+        ? t('User Exclusive Ratio')
+        : t('Group Ratio')
+      rows.push({
+        label: t('Billing Process'),
+        value: `(${t('Input')} ${promptTokens.toLocaleString()} tokens / 1M tokens * ${fmtPrice(baseInputUSD)} + ${t('Output')} ${completionTokens.toLocaleString()} tokens / 1M tokens * ${fmtPrice(outputUSD)}) * ${groupRatioLabel} ${formatRatio(groupRatio)} = ${formatLogQuota(log.quota)}`,
+      })
+    }
+  }
+
   if (rows.length === 0) return null
 
   return (
