@@ -67,6 +67,8 @@ import {
   createDefaultVideoPricingConfig,
   generateVideoPricingExpr,
   tryParseVideoPricingConfig,
+  VIDEO_UNIT_TOKEN,
+  VIDEO_UNIT_SECOND,
 } from './videoPricing';
 
 const { Text } = Typography;
@@ -790,6 +792,15 @@ function VideoPricingEditor({ config, onChange, t }) {
   const { symbol, rate, type } = getCurrencyConfig();
   const currencyRate = type === 'TOKENS' ? 1 : rate || 1;
   const currencyLabel = type === 'TOKENS' ? 'USD' : type;
+  const billingUnit =
+    config.billingUnit === VIDEO_UNIT_SECOND
+      ? VIDEO_UNIT_SECOND
+      : VIDEO_UNIT_TOKEN;
+  const isPerSecond = billingUnit === VIDEO_UNIT_SECOND;
+  const priceUnitLabel = isPerSecond
+    ? `${currencyLabel} / ${t('秒')}`
+    : `${currencyLabel} / 1M Tokens`;
+  const priceSuffix = isPerSecond ? `/ ${t('秒')}` : '/ 1M';
   const rowKeys = config.rows.map(
     (row) =>
       `${String(row.resolution).trim().toLowerCase()}|${row.referenceVideo}`,
@@ -888,7 +899,7 @@ function VideoPricingEditor({ config, onChange, t }) {
       ),
     },
     {
-      title: `${t('单价')} (${currencyLabel} / 1M Tokens)`,
+      title: `${t('单价')} (${priceUnitLabel})`,
       dataIndex: 'unitPriceUSD',
       width: 240,
       render: (value, record) => (
@@ -897,7 +908,7 @@ function VideoPricingEditor({ config, onChange, t }) {
           min={0}
           step={0.0001}
           prefix={symbol}
-          suffix='/ 1M'
+          suffix={priceSuffix}
           aria-label={t('单价')}
           onChange={(next) =>
             updateRow(record.rowIndex, {
@@ -941,6 +952,31 @@ function VideoPricingEditor({ config, onChange, t }) {
 
   return (
     <div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Text strong>{t('计价单位')}</Text>
+        <RadioGroup
+          type='button'
+          buttonSize='small'
+          value={billingUnit}
+          onChange={(e) => onChange({ ...config, billingUnit: e.target.value })}
+        >
+          <Radio value={VIDEO_UNIT_TOKEN}>{t('按 Token（每 1M）')}</Radio>
+          <Radio value={VIDEO_UNIT_SECOND}>{t('按视频秒数')}</Radio>
+        </RadioGroup>
+        <Text size='small' type='secondary'>
+          {isPerSecond
+            ? t('按请求 duration（秒）线性计费，支持小数秒')
+            : t('按补全 Token 数计费')}
+        </Text>
+      </div>
       {hasDuplicates ? (
         <Banner
           type='danger'

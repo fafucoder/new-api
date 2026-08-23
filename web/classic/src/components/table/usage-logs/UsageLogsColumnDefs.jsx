@@ -463,14 +463,22 @@ function getUsageLogDetailSummary(record, text, billingDisplayMode, t) {
 
   if (other?.video_billing) {
     const videoBilling = other.video_billing;
+    const isPerSecond = videoBilling.billing_unit === 'second';
     const tokens = videoBilling.tokens ?? record.completion_tokens ?? 0;
+    const durationSeconds = Number(videoBilling.duration) || 0;
     const unitPriceUSD = Number(videoBilling.unit_price_usd) || 0;
     const groupRatio =
       Number(videoBilling.group_ratio ?? other.group_ratio) || 1;
+    const amountBeforeGroupUSD =
+      videoBilling.amount_before_group_usd ??
+      (isPerSecond
+        ? durationSeconds * unitPriceUSD
+        : (tokens * unitPriceUSD) / 1000000);
     const finalAmountUSD =
-      videoBilling.final_amount_usd ??
-      (videoBilling.amount_before_group_usd ??
-        (tokens * unitPriceUSD) / 1000000) * groupRatio;
+      videoBilling.final_amount_usd ?? amountBeforeGroupUSD * groupRatio;
+    const usageText = isPerSecond
+      ? `${durationSeconds} ${t('秒')} × ${convertUSDToCurrency(unitPriceUSD, 4)}/${t('秒')} × ${groupRatio.toFixed(4)}`
+      : `${Number(tokens).toLocaleString()} Tokens × ${convertUSDToCurrency(unitPriceUSD, 4)}/M × ${groupRatio.toFixed(4)}`;
     return {
       segments: [
         {
@@ -478,7 +486,7 @@ function getUsageLogDetailSummary(record, text, billingDisplayMode, t) {
           tone: 'primary',
         },
         {
-          text: `${Number(tokens).toLocaleString()} Tokens × ${convertUSDToCurrency(unitPriceUSD, 4)}/M × ${groupRatio.toFixed(4)}`,
+          text: usageText,
           tone: 'secondary',
         },
         {

@@ -509,14 +509,19 @@ export const useLogsData = () => {
         }
         if (other?.video_billing) {
           const videoBilling = other.video_billing;
+          const isPerSecond = videoBilling.billing_unit === 'second';
           const tokens = videoBilling.tokens ?? logs[i].completion_tokens ?? 0;
+          const durationSeconds = Number(videoBilling.duration) || 0;
           const unitPriceUSD = Number(videoBilling.unit_price_usd) || 0;
           const groupRatio =
             Number(videoBilling.group_ratio ?? other.group_ratio) || 1;
+          const amountBeforeGroupUSD =
+            videoBilling.amount_before_group_usd ??
+            (isPerSecond
+              ? durationSeconds * unitPriceUSD
+              : (tokens * unitPriceUSD) / 1000000);
           const finalAmountUSD =
-            videoBilling.final_amount_usd ??
-            (videoBilling.amount_before_group_usd ??
-              (tokens * unitPriceUSD) / 1000000) * groupRatio;
+            videoBilling.final_amount_usd ?? amountBeforeGroupUSD * groupRatio;
           const deductedAmountUSD =
             videoBilling.deducted_amount_usd ?? finalAmountUSD;
           const unitPrice = convertUSDToCurrency(unitPriceUSD, 4);
@@ -528,6 +533,18 @@ export const useLogsData = () => {
           const groupRatioText = logs[i].group
             ? `${logs[i].group} (${ratioText})`
             : ratioText;
+          const unitPriceLabel = isPerSecond
+            ? `${currencyLabel} / ${t('秒')}`
+            : `${currencyLabel} / 1M Tokens`;
+          const usageEntry = isPerSecond
+            ? {
+                key: t('视频时长'),
+                value: `${durationSeconds} ${t('秒')}`,
+              }
+            : { key: t('令牌'), value: Number(tokens).toLocaleString() };
+          const processText = isPerSecond
+            ? `${durationSeconds} ${t('秒')} × ${unitPrice} / ${t('秒')} × ${groupRatio.toFixed(4)} = ${finalAmount}`
+            : `${Number(tokens).toLocaleString()} × ${unitPrice} / 1M Tokens × ${groupRatio.toFixed(4)} = ${finalAmount}`;
 
           expandDataLocal.push(
             {
@@ -536,14 +553,16 @@ export const useLogsData = () => {
                 ? t('本地用量计费')
                 : t('上游返回用量计费'),
             },
-            { key: t('令牌'), value: Number(tokens).toLocaleString() },
+            usageEntry,
             {
               key: t('单价'),
-              value: `${unitPrice} / 1M Tokens`,
+              value: isPerSecond
+                ? `${unitPrice} / ${t('秒')}`
+                : `${unitPrice} / 1M Tokens`,
             },
             {
               key: t('计价单位'),
-              value: `${currencyLabel} / 1M Tokens`,
+              value: unitPriceLabel,
             },
             {
               key: t('分辨率'),
@@ -556,7 +575,7 @@ export const useLogsData = () => {
             { key: t('分组倍率'), value: groupRatioText },
             {
               key: t('计费过程'),
-              value: `${Number(tokens).toLocaleString()} × ${unitPrice} / 1M Tokens × ${groupRatio.toFixed(4)} = ${finalAmount}`,
+              value: processText,
             },
             { key: t('最终金额'), value: finalAmount },
             {

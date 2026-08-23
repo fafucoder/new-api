@@ -19,8 +19,23 @@ For commercial licensing, please contact support@quantumnous.com
 
 const DEFAULT_RESOLUTIONS = ['480p', '720p', '1080p'];
 
+// Billing units. 'token' prices per 1M completion tokens (legacy default);
+// 'second' prices per video second read from the request body.
+export const VIDEO_UNIT_TOKEN = 'token';
+export const VIDEO_UNIT_SECOND = 'second';
+
+// Reads the video duration (seconds) from common request body shapes. Falls
+// back to 0 when absent so per-second expressions never error on nil.
+const DURATION_EXPR =
+  '(param("duration") ?? param("metadata.duration") ?? param("seconds") ?? param("metadata.seconds") ?? 0)';
+
+function normalizedUnit(value) {
+  return value === VIDEO_UNIT_SECOND ? VIDEO_UNIT_SECOND : VIDEO_UNIT_TOKEN;
+}
+
 export function createDefaultVideoPricingConfig() {
   return {
+    billingUnit: VIDEO_UNIT_TOKEN,
     rows: DEFAULT_RESOLUTIONS.flatMap((resolution) => [
       { resolution, referenceVideo: false, unitPriceUSD: 0 },
       { resolution, referenceVideo: true, unitPriceUSD: 0 },
@@ -55,12 +70,24 @@ function numberLiteral(value) {
   return String(Number.isFinite(number) && number >= 0 ? number : 0);
 }
 
-function tierLabel(row, isDefault = false) {
-  return `video|${encodeURIComponent(normalizedResolution(row.resolution))}|${row.referenceVideo ? 1 : 0}${isDefault ? '|default' : ''}`;
+function tierLabel(row, unit, isDefault = false) {
+  const unitSeg = normalizedUnit(unit) === VIDEO_UNIT_SECOND ? '|s' : '';
+  return `video|${encodeURIComponent(normalizedResolution(row.resolution))}|${row.referenceVideo ? 1 : 0}${unitSeg}${isDefault ? '|default' : ''}`;
+}
+
+// Builds the cost sub-expression for a row. Per-token: c * price. Per-second:
+// duration * (price * 1e6) so the backend's /1e6 quota conversion yields
+// price * seconds USD.
+function costExpr(row, unit) {
+  const price = numberLiteral(row.unitPriceUSD);
+  if (normalizedUnit(unit) === VIDEO_UNIT_SECOND) {
+    return `${DURATION_EXPR} * ${numberLiteral(Number(row.unitPriceUSD) * 1000000)}`;
+  }
+  return `c * ${price}`;
 }
 
 export function parseVideoTierLabel(label) {
-  const match = /^video\|([^|]+)\|(0|1)(\|default)?$/.exec(label || '');
+  const match = /^video\|([^|]+)\|(0|1)(\|s)?(\|default)?$/.exec(label || '');
   if (!match) return null;
 
   try {
@@ -69,7 +96,8 @@ export function parseVideoTierLabel(label) {
     return {
       resolution,
       hasVideoInput: match[2] === '1',
-      isDefault: Boolean(match[3]),
+      unit: match[3] ? VIDEO_UNIT_SECOND : VIDEO_UNIT_TOKEN,
+      isDefault: Boolean(match[4]),
     };
   } catch {
     return null;
@@ -104,6 +132,7 @@ const REFERENCE_VIDEO_CONDITION = [
 ].join(' || ');
 
 export function generateVideoPricingExpr(config) {
+  const unit = normalizedUnit(config.billingUnit);
   const configuredRows = config.rows.filter(
     (row) => normalizedResolution(row.resolution) !== '',
   );
@@ -126,7 +155,7 @@ export function generateVideoPricingExpr(config) {
         ? `(${REFERENCE_VIDEO_CONDITION})`
         : `!(${REFERENCE_VIDEO_CONDITION})`;
       const condition = `(${resolutionCondition(row.resolution)}) && ${referenceCondition}`;
-      const tier = `tier(${JSON.stringify(tierLabel(row))}, c * ${numberLiteral(row.unitPriceUSD)})`;
+      const tier = `tier(${JSON.stringify(tierLabel(row, unit))}, ${costExpr(row, unit)})`;
       return `${condition} ? ${tier}`;
     });
 
@@ -135,9 +164,9 @@ export function generateVideoPricingExpr(config) {
     (row) => !row.referenceVideo,
   );
   const defaultExpr = defaultWithReference
-    ? `(${REFERENCE_VIDEO_CONDITION}) ? tier(${JSON.stringify(tierLabel(defaultWithReference, true))}, c * ${numberLiteral(defaultWithReference.unitPriceUSD)}) : ${defaultWithoutReference ? `tier(${JSON.stringify(tierLabel(defaultWithoutReference, true))}, c * ${numberLiteral(defaultWithoutReference.unitPriceUSD)})` : 'c * 0'}`
+    ? `(${REFERENCE_VIDEO_CONDITION}) ? tier(${JSON.stringify(tierLabel(defaultWithReference, unit, true))}, ${costExpr(defaultWithReference, unit)}) : ${defaultWithoutReference ? `tier(${JSON.stringify(tierLabel(defaultWithoutReference, unit, true))}, ${costExpr(defaultWithoutReference, unit)})` : 'c * 0'}`
     : defaultWithoutReference
-      ? `tier(${JSON.stringify(tierLabel(defaultWithoutReference, true))}, c * ${numberLiteral(defaultWithoutReference.unitPriceUSD)})`
+      ? `tier(${JSON.stringify(tierLabel(defaultWithoutReference, unit, true))}, ${costExpr(defaultWithoutReference, unit)})`
       : 'c * 0';
   return [...branches, defaultExpr].join(' : ');
 }
@@ -148,7 +177,7 @@ function generateLegacyVideoPricingExpr(rows, fallbackPrice) {
       ? `(${REFERENCE_VIDEO_CONDITION})`
       : `!(${REFERENCE_VIDEO_CONDITION})`;
     const condition = `(${resolutionCondition(row.resolution)}) && ${referenceCondition}`;
-    const tier = `tier(${JSON.stringify(tierLabel(row))}, c * ${numberLiteral(row.unitPriceUSD)})`;
+    const tier = `tier(${JSON.stringify(tierLabel(row, VIDEO_UNIT_TOKEN))}, c * ${numberLiteral(row.unitPriceUSD)})`;
     return `${condition} ? ${tier}`;
   });
   return [
@@ -160,6 +189,12 @@ function generateLegacyVideoPricingExpr(rows, fallbackPrice) {
 export function tryParseVideoPricingConfig(exprString) {
   if (!exprString) return null;
   const body = exprString.replace(/^v\d+:/, '');
+
+  // Per-second pricing uses a duration-based cost expression; detect it first.
+  if (body.includes('param("duration")')) {
+    return tryParseSecondVideoPricingConfig(body);
+  }
+
   const rowPattern =
     /tier\("video\|([^"|]+)\|(0|1)(\|default)?",\s*c\s*\*\s*([\d.eE+-]+)\)/g;
   const rows = [];
@@ -199,12 +234,56 @@ export function tryParseVideoPricingConfig(exprString) {
     ) {
       return null;
     }
-    return { rows: sortVideoPricingRows(rows), defaultResolution };
+    return {
+      billingUnit: VIDEO_UNIT_TOKEN,
+      rows: sortVideoPricingRows(rows),
+      defaultResolution,
+    };
   }
 
   if (!defaultResolution || legacyFallbackMatch) return null;
 
   const config = {
+    billingUnit: VIDEO_UNIT_TOKEN,
+    rows,
+    defaultResolution,
+  };
+  if (
+    generateVideoPricingExpr(config).replace(/\s+/g, '') !==
+    body.replace(/\s+/g, '')
+  ) {
+    return null;
+  }
+  return { ...config, rows: sortVideoPricingRows(rows) };
+}
+
+function tryParseSecondVideoPricingConfig(body) {
+  // tier("video|res|0|s", <DURATION_EXPR> * NUMBER) with optional |default.
+  const rowPattern =
+    /tier\("video\|([^"|]+)\|(0|1)\|s(\|default)?",\s*[^,]*?\*\s*([\d.eE+-]+)\)/g;
+  const rows = [];
+  let defaultResolution = '';
+  let match;
+  while ((match = rowPattern.exec(body)) !== null) {
+    let resolution;
+    try {
+      resolution = decodeURIComponent(match[1]);
+    } catch {
+      return null;
+    }
+    rows.push({
+      resolution,
+      referenceVideo: match[2] === '1',
+      // Coefficient is price * 1e6; convert back to a per-second USD price.
+      unitPriceUSD: (Number(match[4]) || 0) / 1000000,
+    });
+    if (match[3]) defaultResolution = resolution;
+  }
+
+  if (rows.length === 0 || !defaultResolution) return null;
+
+  const config = {
+    billingUnit: VIDEO_UNIT_SECOND,
     rows,
     defaultResolution,
   };

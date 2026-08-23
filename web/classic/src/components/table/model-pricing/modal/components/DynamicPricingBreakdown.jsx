@@ -202,7 +202,10 @@ export default function DynamicPricingBreakdown({
             ),
         },
         {
-          title: t('价格'),
+          title:
+            videoConfig?.billingUnit === 'second'
+              ? `${t('价格')} (${symbol}/${t('秒')})`
+              : `${t('价格')} (${symbol}/1M tokens)`,
           dataIndex: 'price',
           width: 150,
           render: (price) =>
@@ -246,6 +249,18 @@ export default function DynamicPricingBreakdown({
           })),
       ];
 
+  const videoPriceForTier = (videoTier) => {
+    // Per-second prices live in nested parens that parseTiersFromExpr cannot
+    // extract; source them from the parsed video config (works for both units).
+    const row = (videoConfig?.rows || []).find(
+      (r) =>
+        String(r.resolution).trim().toLowerCase() ===
+          String(videoTier.resolution).trim().toLowerCase() &&
+        Boolean(r.referenceVideo) === Boolean(videoTier.hasVideoInput),
+    );
+    return Number(row?.unitPriceUSD || 0);
+  };
+
   const tierData = isVideoPricing
     ? availableGroups.flatMap((group) => {
         const ratio = groupRatio[group] ?? 1;
@@ -256,7 +271,7 @@ export default function DynamicPricingBreakdown({
           groupRowSpan: videoPricingTiers.length,
           label: tier.label,
           videoTier,
-          price: Number(tier.outputPrice || 0) * ratio * rate,
+          price: videoPriceForTier(videoTier) * ratio * rate,
         }));
       })
     : hasTiers

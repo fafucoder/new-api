@@ -26,6 +26,100 @@ var taskTokenWritebackPlatforms = map[constant.TaskPlatform]bool{
 	constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeMaasSeedance)): true,
 }
 
+// videoBillingParams carries everything needed to render a video billing log
+// entry, independent of billing unit (per-token vs per-second).
+type videoBillingParams struct {
+	resolution           string
+	hasReferenceVideo    bool
+	unit                 string  // billingexpr.VideoUnitToken / VideoUnitSecond
+	tokens               int     // completion tokens (per-token unit)
+	durationSeconds      float64 // video seconds (per-second unit)
+	amountBeforeGroupUSD float64 // expression cost / 1e6, in USD before group ratio
+	groupRatio           float64
+	deductedQuota        int
+	quotaPerUnit         float64
+	videoURL             string
+}
+
+// buildVideoBillingMap assembles the video_billing log payload consumed by the
+// frontend usage-log renderers. The "billing_unit" field lets the frontend pick
+// the right breakdown; per-token entries keep their historical shape so old
+// logs and per-token pricing render unchanged.
+func buildVideoBillingMap(p videoBillingParams) map[string]interface{} {
+	unit := p.unit
+	if unit == "" {
+		unit = billingexpr.VideoUnitToken
+	}
+	deductedAmountUSD := 0.0
+	if p.quotaPerUnit > 0 {
+		deductedAmountUSD = float64(p.deductedQuota) / p.quotaPerUnit
+	}
+	videoBilling := map[string]interface{}{
+		"resolution":              p.resolution,
+		"reference_video":         p.hasReferenceVideo,
+		"billing_unit":            unit,
+		"amount_before_group_usd": p.amountBeforeGroupUSD,
+		"group_ratio":             p.groupRatio,
+		"final_amount_usd":        p.amountBeforeGroupUSD * p.groupRatio,
+		"deducted_quota":          p.deductedQuota,
+		"deducted_amount_usd":     deductedAmountUSD,
+	}
+	if unit == billingexpr.VideoUnitSecond {
+		videoBilling["duration"] = p.durationSeconds
+		unitPriceUSD := 0.0
+		if p.durationSeconds > 0 {
+			unitPriceUSD = p.amountBeforeGroupUSD / p.durationSeconds
+		}
+		videoBilling["unit_price_usd"] = unitPriceUSD
+	} else {
+		videoBilling["tokens"] = p.tokens
+		unitPriceUSD := 0.0
+		if p.tokens > 0 {
+			// amountBeforeGroupUSD = cost/1e6; unit price is $/1M tokens = cost/tokens.
+			unitPriceUSD = p.amountBeforeGroupUSD * 1_000_000 / float64(p.tokens)
+		}
+		videoBilling["unit_price_usd"] = unitPriceUSD
+	}
+	if p.videoURL != "" {
+		videoBilling["video_url"] = p.videoURL
+	}
+	return videoBilling
+}
+
+// injectVideoBillingAtSubmit attaches a video_billing breakdown to the
+// submission-time consume log for per-second video pricing. Per-second quota is
+// fully determined by the request duration at pre-consume time, so — unlike
+// per-token pricing, which is finalized during token settlement — the breakdown
+// must be written here or it would never appear (per-second tasks may return
+// zero usage tokens). Per-token tiers are left untouched and handled at
+// settlement as before.
+func injectVideoBillingAtSubmit(other map[string]interface{}, info *relaycommon.RelayInfo) {
+	snap := info.TieredBillingSnapshot
+	if snap == nil || info.BillingRequestInput == nil {
+		return
+	}
+	tierInfo, ok := billingexpr.ParseVideoTierLabel(snap.EstimatedTier)
+	if !ok || tierInfo.Unit != billingexpr.VideoUnitSecond {
+		return
+	}
+	durationSeconds, _ := billingexpr.ExtractVideoDuration(*info.BillingRequestInput)
+	videoInfo, _ := billingexpr.ExtractVideoRequestInfo(*info.BillingRequestInput)
+	resolution := videoInfo.Resolution
+	if resolution == "" || tierInfo.Default {
+		resolution = tierInfo.Resolution
+	}
+	other["video_billing"] = buildVideoBillingMap(videoBillingParams{
+		resolution:           resolution,
+		hasReferenceVideo:    tierInfo.HasReferenceVideo,
+		unit:                 billingexpr.VideoUnitSecond,
+		durationSeconds:      durationSeconds,
+		amountBeforeGroupUSD: snap.EstimatedQuotaBeforeGroup / snap.QuotaPerUnit,
+		groupRatio:           snap.GroupRatio,
+		deductedQuota:        snap.EstimatedQuotaAfterGroup,
+		quotaPerUnit:         snap.QuotaPerUnit,
+	})
+}
+
 // LogTaskConsumption 记录任务消费日志和统计信息（仅记录，不涉及实际扣费）。
 // 实际扣费已由 BillingSession（PreConsumeBilling + SettleBilling）完成。
 func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, billedQuota int) {
@@ -81,6 +175,7 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo, billedQuota
 	appendFinalRequestFormat(info, other)
 	appendBillingInfo(info, other)
 	InjectTieredBillingInfo(other, info, nil)
+	injectVideoBillingAtSubmit(other, info)
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
 		ChannelId: info.ChannelId,
 		ModelName: info.OriginModelName,
@@ -400,37 +495,32 @@ func RecalculateTaskQuotaByTokens(ctx context.Context, task *model.Task, totalTo
 			"group_ratio":  bc.TieredBillingSnapshot.GroupRatio,
 		}
 		videoInfo, isVideoRequest := billingexpr.ExtractVideoRequestInfo(requestInput)
+		videoUnit := billingexpr.VideoUnitToken
 		if tierInfo, ok := billingexpr.ParseVideoTierLabel(result.MatchedTier); ok {
 			isVideoRequest = true
 			if videoInfo.Resolution == "" || tierInfo.Default {
 				videoInfo.Resolution = tierInfo.Resolution
 			}
 			videoInfo.HasReferenceVideo = tierInfo.HasReferenceVideo
+			videoUnit = tierInfo.Unit
 		}
 		if isVideoRequest {
-			unitPriceUSD := 0.0
-			if totalTokens > 0 {
-				unitPriceUSD = result.ActualCost / float64(totalTokens)
+			durationSeconds := 0.0
+			if videoUnit == billingexpr.VideoUnitSecond {
+				durationSeconds, _ = billingexpr.ExtractVideoDuration(requestInput)
 			}
-			amountBeforeGroupUSD := result.ActualCost / 1_000_000
-			deductedAmountUSD := 0.0
-			if bc.TieredBillingSnapshot.QuotaPerUnit > 0 {
-				deductedAmountUSD = float64(result.ActualQuotaAfterGroup) / bc.TieredBillingSnapshot.QuotaPerUnit
-			}
-			videoBilling := map[string]interface{}{
-				"resolution":              videoInfo.Resolution,
-				"reference_video":         videoInfo.HasReferenceVideo,
-				"tokens":                  totalTokens,
-				"unit_price_usd":          unitPriceUSD,
-				"amount_before_group_usd": amountBeforeGroupUSD,
-				"group_ratio":             bc.TieredBillingSnapshot.GroupRatio,
-				"final_amount_usd":        amountBeforeGroupUSD * bc.TieredBillingSnapshot.GroupRatio,
-				"deducted_quota":          result.ActualQuotaAfterGroup,
-				"deducted_amount_usd":     deductedAmountUSD,
-			}
-			if videoURL := task.GetResultURL(); videoURL != "" {
-				videoBilling["video_url"] = videoURL
-			}
+			videoBilling := buildVideoBillingMap(videoBillingParams{
+				resolution:           videoInfo.Resolution,
+				hasReferenceVideo:    videoInfo.HasReferenceVideo,
+				unit:                 videoUnit,
+				tokens:               totalTokens,
+				durationSeconds:      durationSeconds,
+				amountBeforeGroupUSD: result.ActualCost / 1_000_000,
+				groupRatio:           bc.TieredBillingSnapshot.GroupRatio,
+				deductedQuota:        result.ActualQuotaAfterGroup,
+				quotaPerUnit:         bc.TieredBillingSnapshot.QuotaPerUnit,
+				videoURL:             task.GetResultURL(),
+			})
 			other["video_billing"] = videoBilling
 		}
 

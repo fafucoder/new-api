@@ -14,20 +14,35 @@ type VideoRequestInfo struct {
 	HasReferenceVideo bool
 }
 
+// Video billing units. VideoUnitToken prices per 1M completion tokens (legacy
+// default); VideoUnitSecond prices per video second read from the request body.
+const (
+	VideoUnitToken  = "token"
+	VideoUnitSecond = "second"
+)
+
 // VideoTierInfo describes the stable tier label emitted by the video pricing
 // editors. Default is true when the request used the configured default
-// resolution.
+// resolution. Unit is VideoUnitToken or VideoUnitSecond.
 type VideoTierInfo struct {
 	Resolution        string
 	HasReferenceVideo bool
 	Default           bool
+	Unit              string
 }
 
-// ParseVideoTierLabel parses labels in the form video|720p|0 or
-// video|720p|0|default.
+// ParseVideoTierLabel parses labels in the following stable forms:
+//
+//	video|720p|0                — per-token, non-default
+//	video|720p|0|default        — per-token, default resolution
+//	video|720p|0|s              — per-second, non-default
+//	video|720p|0|s|default      — per-second, default resolution
+//
+// The optional "s" segment marks per-second pricing; its absence means
+// per-token (backward compatible with historical labels/logs).
 func ParseVideoTierLabel(label string) (VideoTierInfo, bool) {
 	parts := strings.Split(label, "|")
-	if len(parts) < 3 || len(parts) > 4 || parts[0] != "video" {
+	if len(parts) < 3 || len(parts) > 5 || parts[0] != "video" {
 		return VideoTierInfo{}, false
 	}
 	resolution, err := url.PathUnescape(parts[1])
@@ -37,15 +52,51 @@ func ParseVideoTierLabel(label string) (VideoTierInfo, bool) {
 	if parts[2] != "0" && parts[2] != "1" {
 		return VideoTierInfo{}, false
 	}
-	isDefault := len(parts) == 4 && parts[3] == "default"
-	if len(parts) == 4 && !isDefault {
-		return VideoTierInfo{}, false
+
+	unit := VideoUnitToken
+	isDefault := false
+	// Remaining optional segments must appear in order: ["s"]? then ["default"]?.
+	for _, seg := range parts[3:] {
+		switch seg {
+		case "s":
+			if unit == VideoUnitSecond || isDefault {
+				return VideoTierInfo{}, false
+			}
+			unit = VideoUnitSecond
+		case "default":
+			if isDefault {
+				return VideoTierInfo{}, false
+			}
+			isDefault = true
+		default:
+			return VideoTierInfo{}, false
+		}
 	}
+
 	return VideoTierInfo{
 		Resolution:        strings.ToLower(strings.TrimSpace(resolution)),
 		HasReferenceVideo: parts[2] == "1",
 		Default:           isDefault,
+		Unit:              unit,
 	}, true
+}
+
+// ExtractVideoDuration reads the video duration in seconds from common request
+// body shapes. Returns the duration and true when a positive value is found.
+func ExtractVideoDuration(request RequestInput) (float64, bool) {
+	if len(request.Body) == 0 {
+		return 0, false
+	}
+	for _, path := range []string{"duration", "metadata.duration", "seconds", "metadata.seconds"} {
+		value := gjson.GetBytes(request.Body, path)
+		if !value.Exists() {
+			continue
+		}
+		if seconds := value.Float(); seconds > 0 {
+			return seconds, true
+		}
+	}
+	return 0, false
 }
 
 // ExtractVideoRequestInfo reads common task request shapes without coupling
