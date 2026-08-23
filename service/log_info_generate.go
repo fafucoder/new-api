@@ -57,6 +57,11 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 		other["is_system_prompt_overwritten"] = true
 	}
 
+	// 「关闭滤网拦截」实际触发时（吞掉 content_filter / 改写 finish_reason），记录到日志。
+	if common.GetContextKeyBool(ctx, constant.ContextKeyContentFilterTriggered) {
+		other["content_filter_triggered"] = true
+	}
+
 	adminInfo := make(map[string]interface{})
 	adminInfo["use_channel"] = ctx.GetStringSlice("use_channel")
 	isMultiKey := common.GetContextKeyBool(ctx, constant.ContextKeyChannelIsMultiKey)

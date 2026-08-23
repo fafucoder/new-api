@@ -20,6 +20,12 @@ type ChannelSettings struct {
 	// 网关会将客户端的 n>1 请求在内部拆成 N 个 n=1 的并发上游请求，
 	// 再把结果合并为包含 N 条 choices 的响应返回，用量按 N 份累加。
 	NFanoutEnabled bool `json:"n_fanout_enabled,omitempty"`
+	// ContentFilterBypassEnabled 「关闭滤网拦截」：开启后该渠道
+	//  1) 跳过网关前置敏感词检查，原样透传 prompt 给上游；
+	//  2) 吞掉上游返回的 400 content_filter 错误，伪装成 200 空响应并照常计费；
+	//  3) 将 200 响应中 finish_reason=content_filter 改写为 stop 并清空被拦截内容。
+	// 注意：本开关不影响上游模型自身的安全对齐，仅改变网关对被拦截结果的呈现方式。
+	ContentFilterBypassEnabled bool `json:"content_filter_bypass_enabled,omitempty"`
 }
 
 type VertexKeyType string

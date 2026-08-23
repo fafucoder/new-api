@@ -224,6 +224,17 @@ function renderUseTime(type, t) {
   }
 }
 
+function renderContentFilterTag(other, t) {
+  if (!other?.content_filter_triggered) {
+    return null;
+  }
+  return (
+    <Tag color='orange' shape='circle'>
+      {t('滤网')}
+    </Tag>
+  );
+}
+
 function renderFirstUseTime(type, t) {
   let time = parseFloat(type) / 1000.0;
   time = time.toFixed(1);
@@ -767,15 +778,18 @@ export const getLogsColumns = ({
                 {renderUseTime(text, t)}
                 {renderFirstUseTime(other?.frt, t)}
                 {renderIsStream(record.is_stream, t, other?.stream_status)}
+                {renderContentFilterTag(other, t)}
               </Space>
             </>
           );
         } else {
+          let other = getLogOther(record.other);
           return (
             <>
               <Space>
                 {renderUseTime(text, t)}
                 {renderIsStream(record.is_stream, t)}
+                {renderContentFilterTag(other, t)}
               </Space>
             </>
           );

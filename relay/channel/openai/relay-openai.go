@@ -22,6 +22,31 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// rewriteStreamContentFilter 将流式 chunk 中 finish_reason=content_filter 改写为 stop。
+// 返回改写后的 JSON 字符串；若解析失败或无需改写，则 ok=false。
+func rewriteStreamContentFilter(data string) (string, bool) {
+	var streamResponse dto.ChatCompletionsStreamResponse
+	if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
+		return "", false
+	}
+	changed := false
+	for i := range streamResponse.Choices {
+		fr := streamResponse.Choices[i].FinishReason
+		if fr != nil && *fr == constant.FinishReasonContentFilter {
+			streamResponse.Choices[i].FinishReason = &constant.FinishReasonStop
+			changed = true
+		}
+	}
+	if !changed {
+		return "", false
+	}
+	rewritten, err := common.Marshal(streamResponse)
+	if err != nil {
+		return "", false
+	}
+	return string(rewritten), true
+}
+
 func sendStreamData(c *gin.Context, info *relaycommon.RelayInfo, data string, forceFormat bool, thinkToContent bool) error {
 	if data == "" {
 		return nil
@@ -29,6 +54,16 @@ func sendStreamData(c *gin.Context, info *relaycommon.RelayInfo, data string, fo
 
 	if info.ChannelSetting.KimiConvert {
 		data = ConvertKimiStreamChunk(data)
+	}
+
+	// 「关闭滤网拦截」：将流式响应中 finish_reason=content_filter 归一为 stop，
+	// 避免客户端因内容过滤标记而报错/中断。仅在数据可能含 content_filter 时才解析改写，
+	// 其余 chunk 保持原有透传路径不受影响。
+	if info.ChannelSetting.ContentFilterBypassEnabled && strings.Contains(data, constant.FinishReasonContentFilter) {
+		if rewritten, ok := rewriteStreamContentFilter(data); ok {
+			common.SetContextKey(c, constant.ContextKeyContentFilterTriggered, true)
+			data = rewritten
+		}
 	}
 
 	unifyModel := info.GetClientFacingModelName()
@@ -242,9 +277,18 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
 
-	for _, choice := range simpleResponse.Choices {
-		if choice.FinishReason == constant.FinishReasonContentFilter {
+	for i := range simpleResponse.Choices {
+		if simpleResponse.Choices[i].FinishReason == constant.FinishReasonContentFilter {
 			common.SetContextKey(c, constant.ContextKeyAdminRejectReason, "openai_finish_reason=content_filter")
+			// 「关闭滤网拦截」：将 content_filter 改写为 stop，并清空被拦截内容。
+			if info.ChannelSetting.ContentFilterBypassEnabled {
+				common.SetContextKey(c, constant.ContextKeyContentFilterTriggered, true)
+				simpleResponse.Choices[i].FinishReason = constant.FinishReasonStop
+				simpleResponse.Choices[i].Message.SetStringContent("")
+				simpleResponse.Choices[i].Message.ReasoningContent = nil
+				simpleResponse.Choices[i].Message.Reasoning = nil
+				continue
+			}
 			break
 		}
 	}

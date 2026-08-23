@@ -124,6 +124,10 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 	}
 
 	needSensitiveCheck := setting.ShouldCheckPromptSensitive()
+	// 「关闭滤网拦截」开关开启时，跳过网关前置敏感词检查，原样透传 prompt 给上游。
+	if channelSetting, ok := common.GetContextKeyType[dto.ChannelSettings](c, constant.ContextKeyChannelSetting); ok && channelSetting.ContentFilterBypassEnabled {
+		needSensitiveCheck = false
+	}
 	needCountToken := constant.CountToken
 	// Avoid building huge CombineText (strings.Join) when token counting and sensitive check are both disabled.
 	var meta *types.TokenCountMeta

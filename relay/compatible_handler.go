@@ -219,6 +219,15 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 		info.IsStream = info.IsStream || strings.HasPrefix(httpResp.Header.Get("Content-Type"), "text/event-stream")
 		if httpResp.StatusCode != http.StatusOK {
 			newApiErr := service.RelayErrorHandler(c.Request.Context(), httpResp, false)
+			// 「关闭滤网拦截」：吞掉上游 400 content_filter 错误，伪装成正常空响应并照常计费。
+			if info.ChannelSetting.ContentFilterBypassEnabled && service.IsContentFilterError(newApiErr) {
+				logger.LogWarn(c, "content filter bypass: swallowing upstream content_filter error and returning empty response")
+				common.SetContextKey(c, constant.ContextKeyContentFilterTriggered, true)
+				usage := buildContentFilterBypassUsage(info)
+				writeContentFilterBypassResponse(c, info, usage)
+				service.PostTextConsumeQuota(c, info, usage, nil)
+				return nil
+			}
 			// reset status code 重置状态码
 			service.ResetStatusCode(newApiErr, statusCodeMappingStr)
 			return newApiErr

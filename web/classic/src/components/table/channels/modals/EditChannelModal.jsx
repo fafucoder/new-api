@@ -214,6 +214,7 @@ const EditChannelModal = (props) => {
     unify_model_name: false,
     kimi_convert: false,
     n_fanout_enabled: false,
+    content_filter_bypass_enabled: false,
     settings: '',
     // 仅 Vertex: 密钥格式（存入 settings.vertex_key_type）
     vertex_key_type: 'json',
@@ -543,6 +544,7 @@ const EditChannelModal = (props) => {
     unify_model_name: false,
     kimi_convert: false,
     n_fanout_enabled: false,
+    content_filter_bypass_enabled: false,
   });
   const showApiConfigCard = true; // 控制是否显示 API 配置卡片
   const getInitValues = () => ({ ...originInputs });
@@ -903,6 +905,8 @@ const EditChannelModal = (props) => {
           data.unify_model_name = parsedSettings.unify_model_name || false;
           data.kimi_convert = parsedSettings.kimi_convert || false;
           data.n_fanout_enabled = parsedSettings.n_fanout_enabled || false;
+          data.content_filter_bypass_enabled =
+            parsedSettings.content_filter_bypass_enabled || false;
         } catch (error) {
           console.error('解析渠道设置失败:', error);
           data.force_format = false;
@@ -917,6 +921,7 @@ const EditChannelModal = (props) => {
           data.unify_model_name = false;
           data.kimi_convert = false;
           data.n_fanout_enabled = false;
+          data.content_filter_bypass_enabled = false;
         }
       } else {
         data.force_format = false;
@@ -931,6 +936,7 @@ const EditChannelModal = (props) => {
         data.unify_model_name = false;
         data.kimi_convert = false;
         data.n_fanout_enabled = false;
+        data.content_filter_bypass_enabled = false;
       }
 
       if (data.settings) {
@@ -1073,6 +1079,8 @@ const EditChannelModal = (props) => {
         unify_model_name: data.unify_model_name || false,
         kimi_convert: data.kimi_convert || false,
         n_fanout_enabled: data.n_fanout_enabled || false,
+        content_filter_bypass_enabled:
+          data.content_filter_bypass_enabled || false,
       });
       initialModelsRef.current = (data.models || [])
         .map((model) => (model || '').trim())
@@ -1120,6 +1128,7 @@ const EditChannelModal = (props) => {
         data.unify_model_name ||
         data.kimi_convert ||
         data.n_fanout_enabled ||
+        data.content_filter_bypass_enabled ||
         data.system_prompt_override;
       if (hasAdvancedValues) {
         setAdvancedSettingsOpen(true);
@@ -1473,6 +1482,7 @@ const EditChannelModal = (props) => {
       unify_model_name: false,
       kimi_convert: false,
       n_fanout_enabled: false,
+      content_filter_bypass_enabled: false,
     });
     // 重置密钥模式状态
     setKeyMode('append');
@@ -1849,6 +1859,8 @@ const EditChannelModal = (props) => {
       unify_model_name: localInputs.unify_model_name || false,
       kimi_convert: localInputs.kimi_convert || false,
       n_fanout_enabled: localInputs.n_fanout_enabled || false,
+      content_filter_bypass_enabled:
+        localInputs.content_filter_bypass_enabled || false,
     };
     localInputs.setting = JSON.stringify(channelExtraSettings);
 
@@ -1958,6 +1970,7 @@ const EditChannelModal = (props) => {
     delete localInputs.unify_model_name;
     delete localInputs.kimi_convert;
     delete localInputs.n_fanout_enabled;
+    delete localInputs.content_filter_bypass_enabled;
     delete localInputs.is_enterprise_account;
     // 顶层的 vertex_key_type 不应发送给后端
     delete localInputs.vertex_key_type;
@@ -2722,6 +2735,8 @@ const EditChannelModal = (props) => {
 
                   <Form.Switch field='kimi_convert' label={t('Kimi 格式转换')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('kimi_convert', value)} extraText={t('开启后，将非官方渠道（如 OpenRouter 等）返回的 Kimi 响应格式对齐为官方 Kimi 格式（重命名 reasoning 为 reasoning_content，仅保留官方字段、去除多余字段）')} />
                   <Form.Switch field='n_fanout_enabled' label={t('n 参数拆分')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('n_fanout_enabled', value)} extraText={t('针对上游不支持 n 参数的渠道（如 DeepSeek），开启后网关会把客户端 n>1 的请求拆成 N 个 n=1 的并发上游请求，再合并为包含 N 条 choices 的响应返回。用量按 N 份累加计费')} />
+
+                  <Form.Switch field='content_filter_bypass_enabled' label={t('关闭滤网拦截')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('content_filter_bypass_enabled', value)} extraText={t('开启后：1) 跳过网关前置敏感词检查，原样透传 prompt 给上游；2) 吞掉上游返回的 400 content_filter 错误，伪装成 200 空响应；3) 将响应中 finish_reason=content_filter 改写为 stop 并清空内容。注意：本开关不影响上游模型自身的安全对齐，被拦截的请求仍会计费')} />
 
                   <Form.Switch field='pass_through_body_enabled' label={t('透传请求体')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('pass_through_body_enabled', value)} extraText={t('启用请求体透传功能')} />
                   <Form.Switch field='disable_probe' label={t('禁用探测')} checkedText={t('开')} uncheckedText={t('关')} onChange={(value) => handleChannelSettingsChange('disable_probe', value)} extraText={t('开启后,批量"测试所有通道"和定时可用性探测将跳过此渠道')} />

@@ -3093,6 +3093,7 @@
     "统一社会信用代码": "Единый код юрлица",
     "统一响应模型名": "",
     "透传请求体": "Прямая передача тела запроса",
+    "滤网": "Фильтр контента",
     "透传请求头": "Сквозная передача заголовков запроса",
     "图标": "Значок",
     "图标使用 react-icons（Simple Icons）或 URL/emoji，例如：github、gitlab、si:google": "Иконка: react-icons (Simple Icons) или URL/emoji, напр.: github, gitlab, si:google",

@@ -3048,6 +3048,7 @@
     "统一社会信用代码": "统一社会信用代码",
     "统一响应模型名": "统一响应模型名",
     "透传请求体": "透传请求体",
+    "滤网": "滤网",
     "透传请求头": "透传请求头",
     "图标": "图标",
     "图标使用 react-icons（Simple Icons）或 URL/emoji，例如：github、gitlab、si:google": "图标使用 react-icons（Simple Icons）或 URL/emoji，例如：github、gitlab、si:google",

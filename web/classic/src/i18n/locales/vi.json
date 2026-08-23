@@ -3453,6 +3453,7 @@
     "统一社会信用代码": "Mã số doanh nghiệp",
     "统一响应模型名": "",
     "透传请求体": "Truyền qua thân yêu cầu",
+    "滤网": "Bộ lọc nội dung",
     "透传请求头": "Header yêu cầu xuyên suốt",
     "图标": "Biểu tượng",
     "图标使用 react-icons（Simple Icons）或 URL/emoji，例如：github、gitlab、si:google": "Icon sử dụng react-icons (Simple Icons) hoặc URL/emoji, VD: github, gitlab, si:google",

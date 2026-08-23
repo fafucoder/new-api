@@ -3091,6 +3091,7 @@
     "统一社会信用代码": "Unified Social Credit Code",
     "统一响应模型名": "",
     "透传请求体": "Pass through body",
+    "滤网": "Content Filter",
     "透传请求头": "Pass-through header",
     "图标": "Icon",
     "图标使用 react-icons（Simple Icons）或 URL/emoji，例如：github、gitlab、si:google": "Icon uses react-icons (Simple Icons) or URL/emoji, e.g.: github, gitlab, si:google",
