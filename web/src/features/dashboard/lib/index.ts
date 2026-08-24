@@ -44,3 +44,5 @@ export {
 } from './flow'
 export { safeDivide, calculateDashboardStats } from './stats'
 export { getPreviewText } from './text'
+export { aggregateModelSummary } from './model-summary'
+export type { ModelQuotaSummary } from './model-summary'

@@ -89,6 +89,12 @@ const LazyModelCharts = lazy(() =>
   }))
 )
 
+const LazyModelSummaryTable = lazy(() =>
+  import('./components/models/model-summary-table').then((m) => ({
+    default: m.ModelSummaryTable,
+  }))
+)
+
 const LazyConsumptionDistributionChart = lazy(() =>
   import('./components/models/consumption-distribution-chart').then((m) => ({
     default: m.ConsumptionDistributionChart,
@@ -403,8 +409,16 @@ export function Dashboard() {
                   />
                 </Suspense>
               </FadeIn>
+              <FadeIn delay={0.2}>
+                <Suspense fallback={<ModelChartsFallback />}>
+                  <LazyModelSummaryTable
+                    data={modelData}
+                    loading={dataLoading}
+                  />
+                </Suspense>
+              </FadeIn>
               {isAdmin && (
-                <FadeIn delay={0.2}>
+                <FadeIn delay={0.25}>
                   <Suspense fallback={<ModelChartsFallback />}>
                     <LazyChannelCostCharts filters={modelFilters} />
                   </Suspense>
