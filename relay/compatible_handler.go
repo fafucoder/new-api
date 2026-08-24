@@ -92,7 +92,20 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 		return nil
 	}
 
+	// n fan-out：当渠道开启 NFanoutEnabled 且客户端请求 n>1 时，
+	// 网关会把请求拆成 N 个 n=1 的并发上游请求再合并。仅在标准转换路径生效
+	// （透传路径无法安全拆分，nFanoutBody 保持 nil 时自动回退单请求）。
+	// 此处先记录 N，并把发往上游的 n 置为 1。
+	nFanout := shouldNFanout(info, request)
+	nFanoutCount := 0
+	if nFanout {
+		nFanoutCount = *request.N
+		one := 1
+		request.N = &one
+	}
+
 	var requestBody io.Reader
+	var nFanoutBody []byte // 非透传路径下保存最终上游请求体字节，供 n fan-out 复用
 
 	if passThroughGlobal || info.ChannelSetting.PassThroughBodyEnabled {
 		storage, err := common.GetBodyStorage(c)
@@ -175,6 +188,12 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 
 		logger.LogDebug(c, "text request body: %s", jsonData)
 
+		// n fan-out 复用最终上游请求体字节（在 jsonData 置 nil 前保存独立副本）
+		if nFanout {
+			nFanoutBody = make([]byte, len(jsonData))
+			copy(nFanoutBody, jsonData)
+		}
+
 		body, closer, err := relaycommon.NewOutboundJSONBody(jsonData)
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeConvertRequestFailed, types.ErrOptionWithSkipRetry())
@@ -182,6 +201,20 @@ func TextHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *types
 		defer closer.Close()
 		jsonData = nil
 		requestBody = body
+	}
+
+	// n fan-out：走独立的并发多请求合并路径。
+	// 仅在非透传（已生成 nFanoutBody）时生效；透传路径下无法安全拆分，退回单请求。
+	if nFanout && nFanoutBody != nil {
+		isStream := lo.FromPtrOr(request.Stream, false)
+		usage, newApiErr := nFanoutHelper(c, info, adaptor, nFanoutBody, nFanoutCount, isStream)
+		if newApiErr != nil {
+			statusCodeMappingStr := c.GetString("status_code_mapping")
+			service.ResetStatusCode(newApiErr, statusCodeMappingStr)
+			return newApiErr
+		}
+		service.PostTextConsumeQuota(c, info, usage, nil)
+		return nil
 	}
 
 	var httpResp *http.Response

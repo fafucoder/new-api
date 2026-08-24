@@ -23,6 +23,10 @@ type ChannelSettings struct {
 	// HTTP2ConnectionShards spreads HTTP/2 traffic across N independent transports
 	// (1-8). Zero/unset means 1. Ignored when HTTPProtocol is "http1".
 	HTTP2ConnectionShards int `json:"http2_connection_shards,omitempty"`
+	// NFanoutEnabled 开启后，对上游不支持 n 参数的渠道（如 DeepSeek），
+	// 网关会将客户端的 n>1 请求在内部拆成 N 个 n=1 的并发上游请求，
+	// 再把结果合并为包含 N 条 choices 的响应返回，用量按 N 份累加。
+	NFanoutEnabled bool `json:"n_fanout_enabled,omitempty"`
 }
 
 const (

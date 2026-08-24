@@ -3304,6 +3304,8 @@
     "Parsed {{count}} service account file(s)": "已解析 {{count}} 個服務賬號檔案",
     "Partial Submission": "部分提交確認",
     "Pass Headers": "透傳請求頭",
+    "N Parameter Fan-out": "N 参数扇出",
+    "For channels that ignore the n parameter (e.g. DeepSeek), split an n>1 request into N concurrent upstream requests and merge them into N choices": "对忽略 n 参数的渠道（如 DeepSeek），将 n>1 的请求拆成 N 个并发上游请求，再合并为 N 条 choices",
     "Pass request body directly to upstream": "將請求體直接傳遞給上游",
     "Pass specified request headers to upstream": "把指定請求頭透傳到上游請求",
     "Pass Through Body": "透傳請求體",
