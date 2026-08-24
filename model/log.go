@@ -340,21 +340,141 @@ type RecordConsumeLogParams struct {
 	Other            map[string]interface{} `json:"other"`
 	CachedTokens     int                    `json:"cached_tokens"`
 	InputTokens      int                    `json:"input_tokens"`
+	// GroupRatio 是售价所用的有效分组倍率（含用户特殊倍率）。用于把售价还原成
+	// 标准价再计算进货价，使渠道成本不受分组折扣影响。为 0 时按旧口径计算。
+	GroupRatio float64 `json:"group_ratio"`
+}
+
+// computeChannelCostQuota 计算进货价 quota。
+//
+// 进货价 = 标准价 × channel_ratio，成本不应受分组折扣影响。由于 quota 是售价
+// （已乘 group_ratio），需先除掉 group_ratio 还原标准价，再乘 channel_ratio：
+//
+//	cost = quota / group_ratio * channel_ratio
+//
+// group_ratio 无效（<=0：免费组，或调用方未提供该快照）时退回旧口径
+// cost = quota * channel_ratio，避免把成本误算为 0（免费组 quota 本就是 0，结果仍为 0）。
+// 使用饱和转换 helper，越界乘积不会回绕成负数。
+func computeChannelCostQuota(quota int, channelRatio float64, groupRatio float64) int {
+	cost := float64(quota) * channelRatio
+	if groupRatio > 0 {
+		cost /= groupRatio
+	}
+	return common.QuotaFromFloat(cost)
 }
 
 // resolveChannelCost returns the channel cost ratio (进货价倍率) snapshot and the
-// computed cost quota for a consume log. cost = quota * channel_ratio, using the
-// saturating quota helper so an out-of-range product can never wrap negative.
-// A missing/unknown channel falls back to a ratio of 1.0 (cost == quota).
-func resolveChannelCost(channelId int, quota int) (ratio float64, costQuota int) {
+// computed cost quota for a consume log. 未知/缺失渠道回退 ratio=1.0。
+func resolveChannelCost(channelId int, quota int, groupRatio float64) (ratio float64, costQuota int) {
 	ratio = 1.0
 	if channelId > 0 {
 		if channel, err := CacheGetChannel(channelId); err == nil && channel != nil {
 			ratio = channel.GetChannelRatio()
 		}
 	}
-	costQuota = common.QuotaFromFloat(float64(quota) * ratio)
-	return ratio, costQuota
+	return ratio, computeChannelCostQuota(quota, ratio, groupRatio)
+}
+
+// ChannelCostRecalcResult 汇总一次历史渠道成本重算的统计信息。
+type ChannelCostRecalcResult struct {
+	DryRun       bool  `json:"dry_run"`
+	Scanned      int64 `json:"scanned"`        // 扫描的消耗日志条数
+	Changed      int64 `json:"changed"`        // 成本需/已修正的条数
+	Skipped      int64 `json:"skipped"`        // 缺少快照字段、无法重算而跳过的条数
+	OldCostTotal int64 `json:"old_cost_total"` // 变化条目修正前的成本合计
+	NewCostTotal int64 `json:"new_cost_total"` // 变化条目修正后的成本合计
+	LastID       int   `json:"last_id"`        // 处理到的最大日志 ID
+}
+
+// RecalculateHistoricalChannelCost 一次性重算历史消耗日志中的渠道成本
+// (other.admin_info.channel_cost)，修正旧代码把分组折扣错误折进成本、导致成本
+// 偏低（利润虚高）的历史数据。
+//
+// 每条日志的成本从其自身快照重算：cost = computeChannelCostQuota(quota,
+// channel_ratio, group_ratio)，与修复后新写入的口径完全一致，因此重复执行是幂等的
+// （源字段不变 → 结果不变，不会越改越小）。dryRun=true 时只统计、不写库。
+//
+// 仅处理 type=LogTypeConsume 的日志（只有它写入 channel_cost）。缺少 channel_ratio
+// 或 channel_cost 快照的日志无法重算，计入 Skipped 并跳过。group_ratio 缺失/<=0 时
+// 退回旧口径（结果与旧值一致，不会被误改）。start/end 为 0 表示不限制该侧时间边界。
+func RecalculateHistoricalChannelCost(ctx context.Context, start, end int64, dryRun bool, batchSize int) (*ChannelCostRecalcResult, error) {
+	// ClickHouse 日志库不支持逐行 UPDATE，逐行 mutation 会灾难性地慢，直接拒绝。
+	if common.UsingLogDatabase(common.DatabaseTypeClickHouse) {
+		return nil, errors.New("历史成本重算不支持 ClickHouse 日志库（不支持逐行更新）")
+	}
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	result := &ChannelCostRecalcResult{DryRun: dryRun}
+	lastId := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		var logs []*Log
+		tx := LOG_DB.Where("type = ? AND id > ?", LogTypeConsume, lastId)
+		if start > 0 {
+			tx = tx.Where("created_at >= ?", start)
+		}
+		if end > 0 {
+			tx = tx.Where("created_at <= ?", end)
+		}
+		if err := tx.Order("id").Limit(batchSize).Find(&logs).Error; err != nil {
+			return result, err
+		}
+		if len(logs) == 0 {
+			break
+		}
+		for _, log := range logs {
+			lastId = log.Id
+			result.LastID = log.Id
+			result.Scanned++
+
+			otherMap, err := common.StrToMap(log.Other)
+			if err != nil || otherMap == nil {
+				result.Skipped++
+				continue
+			}
+			adminInfo, ok := otherMap["admin_info"].(map[string]interface{})
+			if !ok || adminInfo == nil {
+				result.Skipped++
+				continue
+			}
+			// channel_ratio / channel_cost 是重算的必要快照；缺任一则无法重算。
+			channelRatio, okRatio := adminInfo["channel_ratio"].(float64)
+			oldCostF, okCost := adminInfo["channel_cost"].(float64)
+			if !okRatio || !okCost {
+				result.Skipped++
+				continue
+			}
+			// group_ratio 缺失时为 0，computeChannelCostQuota 会退回旧口径。
+			groupRatio, _ := otherMap["group_ratio"].(float64)
+
+			newCost := computeChannelCostQuota(log.Quota, channelRatio, groupRatio)
+			oldCost := int(oldCostF) // channel_cost 由 int 写入，float64 表示精确
+			if newCost == oldCost {
+				continue
+			}
+
+			result.Changed++
+			result.OldCostTotal += int64(oldCost)
+			result.NewCostTotal += int64(newCost)
+			if dryRun {
+				continue
+			}
+
+			adminInfo["channel_cost"] = newCost
+			otherMap["admin_info"] = adminInfo
+			if err := LOG_DB.Model(&Log{}).Where("id = ?", log.Id).
+				Update("other", common.MapToJsonStr(otherMap)).Error; err != nil {
+				return result, fmt.Errorf("更新日志 #%d 失败: %w", log.Id, err)
+			}
+		}
+		if len(logs) < batchSize {
+			break
+		}
+	}
+	return result, nil
 }
 
 // attachChannelCostToOther nests the channel cost snapshot under
@@ -387,7 +507,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	// admin_info) and fed into the data dashboard aggregation. The ratio
 	// snapshot is captured now so later channel-ratio edits never rewrite
 	// historical cost.
-	channelRatio, costQuota := resolveChannelCost(params.ChannelId, params.Quota)
+	channelRatio, costQuota := resolveChannelCost(params.ChannelId, params.Quota, params.GroupRatio)
 	if params.Other == nil {
 		params.Other = make(map[string]interface{})
 	}
@@ -460,6 +580,9 @@ type RecordTaskBillingLogParams struct {
 	Group     string
 	Other     map[string]interface{}
 	NodeName  string // 任务发起节点；为空时回退当前节点
+	// GroupRatio 是售价所用的有效分组倍率（含用户特殊倍率）。用于把售价还原成
+	// 标准价再计算进货价，使渠道成本不受分组折扣影响。为 0 时按旧口径计算。
+	GroupRatio float64
 }
 
 func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
@@ -474,7 +597,7 @@ func RecordTaskBillingLog(params RecordTaskBillingLogParams) {
 		}
 	}
 	createdAt := common.GetTimestamp()
-	channelRatio, costQuota := resolveChannelCost(params.ChannelId, params.Quota)
+	channelRatio, costQuota := resolveChannelCost(params.ChannelId, params.Quota, params.GroupRatio)
 	if params.LogType == LogTypeConsume {
 		if params.Other == nil {
 			params.Other = make(map[string]interface{})

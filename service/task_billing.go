@@ -53,14 +53,15 @@ func LogTaskConsumption(c *gin.Context, info *relaycommon.RelayInfo) {
 	}
 	attachQuotaSaturation(c, info, other)
 	model.RecordConsumeLog(c, info.UserId, model.RecordConsumeLogParams{
-		ChannelId: info.ChannelId,
-		ModelName: info.OriginModelName,
-		TokenName: tokenName,
-		Quota:     info.PriceData.Quota,
-		Content:   logContent,
-		TokenId:   info.TokenId,
-		Group:     info.UsingGroup,
-		Other:     other,
+		ChannelId:  info.ChannelId,
+		ModelName:  info.OriginModelName,
+		TokenName:  tokenName,
+		Quota:      info.PriceData.Quota,
+		Content:    logContent,
+		TokenId:    info.TokenId,
+		Group:      info.UsingGroup,
+		Other:      other,
+		GroupRatio: info.PriceData.GroupRatioInfo.GroupRatio,
 	})
 	model.UpdateUserUsedQuotaAndRequestCount(info.UserId, info.PriceData.Quota)
 	model.UpdateChannelUsedQuota(info.ChannelId, info.PriceData.Quota)
@@ -152,6 +153,15 @@ func taskBillingContextPriceData(bc *model.TaskBillingContext) *types.PriceData 
 	return priceData
 }
 
+// taskGroupRatio 返回任务计费快照中的有效分组倍率，供还原进货价用。
+// BillingContext 缺失（如历史任务）时返回 0，resolveChannelCost 会据此退回旧口径。
+func taskGroupRatio(task *model.Task) float64 {
+	if bc := task.PrivateData.BillingContext; bc != nil {
+		return bc.GroupRatio
+	}
+	return 0
+}
+
 // taskModelName 从 BillingContext 或 Properties 中获取模型名称。
 func taskModelName(task *model.Task) string {
 	if bc := task.PrivateData.BillingContext; bc != nil && bc.OriginModelName != "" {
@@ -187,15 +197,16 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) bool 
 	other["task_id"] = task.TaskID
 	other["reason"] = reason
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
-		UserId:    task.UserId,
-		LogType:   model.LogTypeRefund,
-		Content:   "",
-		ChannelId: task.ChannelId,
-		ModelName: taskModelName(task),
-		Quota:     quota,
-		TokenId:   task.PrivateData.TokenId,
-		Group:     task.Group,
-		Other:     other,
+		UserId:     task.UserId,
+		LogType:    model.LogTypeRefund,
+		Content:    "",
+		ChannelId:  task.ChannelId,
+		ModelName:  taskModelName(task),
+		Quota:      quota,
+		TokenId:    task.PrivateData.TokenId,
+		Group:      task.Group,
+		Other:      other,
+		GroupRatio: taskGroupRatio(task),
 	})
 
 	// 5. 资金退款完成后再清除持久化标记。
@@ -267,16 +278,17 @@ func RecalculateTaskQuota(ctx context.Context, task *model.Task, actualQuota int
 		attachQuotaSaturationToOther(other, clamp)
 	}
 	model.RecordTaskBillingLog(model.RecordTaskBillingLogParams{
-		UserId:    task.UserId,
-		LogType:   logType,
-		Content:   reason,
-		ChannelId: task.ChannelId,
-		ModelName: taskModelName(task),
-		Quota:     logQuota,
-		TokenId:   task.PrivateData.TokenId,
-		Group:     task.Group,
-		Other:     other,
-		NodeName:  task.PrivateData.NodeName,
+		UserId:     task.UserId,
+		LogType:    logType,
+		Content:    reason,
+		ChannelId:  task.ChannelId,
+		ModelName:  taskModelName(task),
+		Quota:      logQuota,
+		TokenId:    task.PrivateData.TokenId,
+		Group:      task.Group,
+		Other:      other,
+		NodeName:   task.PrivateData.NodeName,
+		GroupRatio: taskGroupRatio(task),
 	})
 }
 

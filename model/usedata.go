@@ -1,11 +1,13 @@
 package model
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"gorm.io/gorm"
 )
 
@@ -238,4 +240,117 @@ func GetChannelCostData(startTime int64, endTime int64, channelID int) ([]*Quota
 	}
 	err := tx.Group("channel_id, created_at").Find(&quotaDatas).Error
 	return quotaDatas, err
+}
+
+// QuotaDataCostRecalcResult 汇总一次 quota_data 渠道成本重算的统计信息。
+type QuotaDataCostRecalcResult struct {
+	DryRun       bool  `json:"dry_run"`
+	Scanned      int64 `json:"scanned"`        // 扫描的 quota_data 行数
+	Changed      int64 `json:"changed"`        // 成本需/已修正的行数
+	OldCostTotal int64 `json:"old_cost_total"` // 变化行修正前的成本合计
+	NewCostTotal int64 `json:"new_cost_total"` // 变化行修正后的成本合计
+	LastID       int   `json:"last_id"`        // 处理到的最大行 ID
+}
+
+// resolveChannelRatioCached 按 channelID 取渠道倍率，带进程内缓存避免逐行查。
+func resolveChannelRatioCached(channelID int, cache map[int]float64) float64 {
+	if r, ok := cache[channelID]; ok {
+		return r
+	}
+	ratio := 1.0
+	if channelID > 0 {
+		if ch, err := CacheGetChannel(channelID); err == nil && ch != nil {
+			ratio = ch.GetChannelRatio()
+		}
+	}
+	cache[channelID] = ratio
+	return ratio
+}
+
+// resolveGroupRatioForRow 复现售价所用的有效分组倍率：优先用户组特殊倍率
+// (GetGroupGroupRatio)，否则使用分组倍率 (GetGroupRatio)。按当前配置反推
+// （quota_data 未存历史 group_ratio），带 (userID,useGroup) 缓存。
+func resolveGroupRatioForRow(userID int, useGroup string, cache map[[2]interface{}]float64) float64 {
+	key := [2]interface{}{userID, useGroup}
+	if r, ok := cache[key]; ok {
+		return r
+	}
+	userGroup, err := GetUserGroup(userID, false)
+	if err != nil {
+		userGroup = ""
+	}
+	ratio := 1.0
+	if special, ok := ratio_setting.GetGroupGroupRatio(userGroup, useGroup); ok {
+		ratio = special
+	} else {
+		ratio = ratio_setting.GetGroupRatio(useGroup)
+	}
+	cache[key] = ratio
+	return ratio
+}
+
+// RecalculateHistoricalQuotaDataCost 一次性重算 quota_data.cost_quota，修正旧口径把
+// 分组折扣错误折进成本、导致渠道成本报表利润虚高的历史数据。
+//
+// 每行成本从其售价合计重算：cost = computeChannelCostQuota(row.Quota, channel_ratio,
+// group_ratio)，与修复后新写入的口径一致，因此重复执行是幂等的（row.Quota 不变 →
+// 结果不变，不会越改越小）。dryRun=true 时只统计、不写库。
+//
+// channel_ratio 按行 ChannelID 取当前渠道配置；group_ratio 按行 UserID+UseGroup 取
+// 当前分组配置（quota_data 未存历史 group_ratio，历史上改过倍率的时段会用当前值）。
+// start/end 为 0 表示不限制该侧时间边界。
+func RecalculateHistoricalQuotaDataCost(ctx context.Context, start, end int64, dryRun bool, batchSize int) (*QuotaDataCostRecalcResult, error) {
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	result := &QuotaDataCostRecalcResult{DryRun: dryRun}
+	channelRatioCache := make(map[int]float64)
+	groupRatioCache := make(map[[2]interface{}]float64)
+	lastId := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		var rows []*QuotaData
+		tx := DB.Table("quota_data").Where("id > ?", lastId)
+		if start > 0 {
+			tx = tx.Where("created_at >= ?", start)
+		}
+		if end > 0 {
+			tx = tx.Where("created_at <= ?", end)
+		}
+		if err := tx.Order("id").Limit(batchSize).Find(&rows).Error; err != nil {
+			return result, err
+		}
+		if len(rows) == 0 {
+			break
+		}
+		for _, row := range rows {
+			lastId = row.Id
+			result.LastID = row.Id
+			result.Scanned++
+
+			channelRatio := resolveChannelRatioCached(row.ChannelID, channelRatioCache)
+			groupRatio := resolveGroupRatioForRow(row.UserID, row.UseGroup, groupRatioCache)
+			newCost := computeChannelCostQuota(row.Quota, channelRatio, groupRatio)
+			if newCost == row.CostQuota {
+				continue
+			}
+
+			result.Changed++
+			result.OldCostTotal += int64(row.CostQuota)
+			result.NewCostTotal += int64(newCost)
+			if dryRun {
+				continue
+			}
+			if err := DB.Table("quota_data").Where("id = ?", row.Id).
+				Update("cost_quota", newCost).Error; err != nil {
+				return result, fmt.Errorf("更新 quota_data #%d 失败: %w", row.Id, err)
+			}
+		}
+		if len(rows) < batchSize {
+			break
+		}
+	}
+	return result, nil
 }

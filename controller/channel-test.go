@@ -507,6 +507,8 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		IsStream:         info.IsStream,
 		Group:            info.UsingGroup,
 		Other:            other,
+		// 渠道测试流量不参与利润核算，分组倍率固定 1.0（成本 = 售价 × 渠道倍率）。
+		GroupRatio: 1.0,
 	})
 	common.SysLog(fmt.Sprintf("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
 	return testResult{

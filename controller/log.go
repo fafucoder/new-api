@@ -149,3 +149,36 @@ func GetLogsSelfStat(c *gin.Context) {
 	})
 	return
 }
+
+// RecalculateChannelCost 一次性重算历史渠道成本，修正旧口径把分组折扣错误折进成本、
+// 导致利润虚高的历史数据。同时修正两处：
+//   - logs.other.admin_info.channel_cost（管理员日志详情逐条成本）
+//   - quota_data.cost_quota（渠道成本报表 / Dashboard 的聚合成本）
+//
+// 两者都从各自的售价快照重算，幂等（重复执行结果一致）。默认 dry-run 只预览，需显式
+// confirm=true 才写库。可选 start_timestamp / end_timestamp 限定时间范围（秒），
+// batch_size 控制分批大小。仅管理员可调用。
+func RecalculateChannelCost(c *gin.Context) {
+	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
+	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
+	confirm := c.Query("confirm") == "true"
+	batchSize, _ := strconv.Atoi(c.Query("batch_size"))
+	ctx := c.Request.Context()
+	dryRun := !confirm
+
+	logResult, err := model.RecalculateHistoricalChannelCost(ctx, startTimestamp, endTimestamp, dryRun, batchSize)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	quotaDataResult, err := model.RecalculateHistoricalQuotaDataCost(ctx, startTimestamp, endTimestamp, dryRun, batchSize)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, gin.H{
+		"logs":       logResult,
+		"quota_data": quotaDataResult,
+	})
+	return
+}
