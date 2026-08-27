@@ -53,6 +53,7 @@ export default function SettingsSidebarModulesAdmin(props) {
       log: true,
       midjourney: true,
       task: true,
+      assets: false,
       status: true,
       modelStatus: true,
       channelValidation: true,
@@ -123,6 +124,7 @@ export default function SettingsSidebarModulesAdmin(props) {
         log: true,
         midjourney: true,
         task: true,
+        assets: false,
         status: true,
         modelStatus: true,
         channelValidation: true,
@@ -201,6 +203,9 @@ export default function SettingsSidebarModulesAdmin(props) {
         if (modules.console && modules.console.channelValidation === undefined) {
           modules.console.channelValidation = true;
         }
+        if (modules.console && modules.console.assets === undefined) {
+          modules.console.assets = false;
+        }
         if (modules.admin && modules.admin.cacheHitStats === undefined) {
           modules.admin.cacheHitStats = true;
         }
@@ -228,6 +233,7 @@ export default function SettingsSidebarModulesAdmin(props) {
             log: true,
             midjourney: true,
             task: true,
+            assets: false,
             status: true,
             modelStatus: true,
             channelValidation: true,
@@ -287,6 +293,7 @@ export default function SettingsSidebarModulesAdmin(props) {
           description: t('绘图任务记录'),
         },
         { key: 'task', title: t('任务日志'), description: t('系统任务记录') },
+        { key: 'assets', title: t('素材管理'), description: t('管理共享图片、视频和音频素材') },
         { key: 'status', title: t('服务状态'), description: t('服务状态监控') },
         { key: 'modelStatus', title: t('模型状态'), description: t('模型可用性监控') },
         { key: 'channelValidation', title: t('模型检测'), description: t('Claude 模型真伪检测') },

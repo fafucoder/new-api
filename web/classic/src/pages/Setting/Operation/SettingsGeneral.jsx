@@ -58,7 +58,6 @@ export default function GeneralSettings(props) {
     DemoSiteEnabled: false,
     SelfUseModeEnabled: false,
     LandingPageEnabled: false,
-    AssetLibraryEnabled: false,
     'token_setting.max_user_tokens': 1000,
   });
   const refForm = useRef();
@@ -399,17 +398,6 @@ export default function GeneralSettings(props) {
                   checkedText='｜'
                   uncheckedText='〇'
                   onChange={handleFieldChange('LandingPageEnabled')}
-                />
-              </Col>
-              <Col xs={24} sm={12} md={8} lg={8} xl={8}>
-                <Form.Switch
-                  field={'AssetLibraryEnabled'}
-                  label={t('素材库')}
-                  extraText={t('控制是否向用户展示素材库')}
-                  size='default'
-                  checkedText='｜'
-                  uncheckedText='〇'
-                  onChange={handleFieldChange('AssetLibraryEnabled')}
                 />
               </Col>
             </Row>

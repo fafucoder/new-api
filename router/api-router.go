@@ -193,7 +193,18 @@ func SetApiRouter(router *gin.Engine) {
 			assetLibraryRoute.DELETE("/groups/:id", controller.DeleteAssetLibraryGroup)
 			assetLibraryRoute.POST("/groups/:id/refresh", controller.PostRefreshAssetLibraryGroup)
 			assetLibraryRoute.POST("/groups/:id/assets", middleware.CriticalRateLimit(), controller.PostAssetLibraryGroupAssets)
+			assetLibraryRoute.PATCH("/groups/:id/assets/:assetId", controller.PatchAssetLibraryAsset)
 			assetLibraryRoute.DELETE("/groups/:id/assets/:assetId", controller.DeleteAssetLibraryAsset)
+
+			// Upstream configuration is admin-only.
+			assetLibraryUpstreamRoute := assetLibraryRoute.Group("/upstreams")
+			assetLibraryUpstreamRoute.Use(middleware.AdminAuth())
+			{
+				assetLibraryUpstreamRoute.GET("", controller.GetAssetLibraryUpstreams)
+				assetLibraryUpstreamRoute.POST("", controller.CreateAssetLibraryUpstream)
+				assetLibraryUpstreamRoute.PUT("/:id", controller.UpdateAssetLibraryUpstream)
+				assetLibraryUpstreamRoute.DELETE("/:id", controller.DeleteAssetLibraryUpstream)
+			}
 		}
 		modelUptimeRoute := apiRouter.Group("/model-uptime")
 		modelUptimeRoute.Use(middleware.UserAuth())

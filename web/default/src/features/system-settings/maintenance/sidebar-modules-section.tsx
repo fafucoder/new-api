@@ -108,6 +108,10 @@ export function SidebarModulesSection({
         title: t('Task logs'),
         description: t('Background job tracker for queued work.'),
       },
+      assets: {
+        title: t('Asset Library'),
+        description: t('Manage shared images, videos, and audio.'),
+      },
     },
     personal: {
       topup: {

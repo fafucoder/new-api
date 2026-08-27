@@ -48,7 +48,7 @@ const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
     log: true,
     midjourney: true,
     task: true,
-    assets: true,
+    assets: false,
   },
   personal: {
     enabled: true,

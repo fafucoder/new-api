@@ -32,7 +32,6 @@ const defaultOperationsSettings: OperationsSettings = {
   DefaultCollapseSidebar: false,
   DemoSiteEnabled: false,
   SelfUseModeEnabled: false,
-  AssetLibraryEnabled: false,
   VideoTaskPreConsumeEnabled: true,
   ChannelDisableThreshold: '',
   QuotaRemindThreshold: '',

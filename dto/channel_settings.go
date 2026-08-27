@@ -42,20 +42,6 @@ const (
 	AwsKeyTypeApiKey AwsKeyType = "api_key"
 )
 
-// AssetLibraryEndpointSettings describes a channel's upstream asset API.
-// Paths may be absolute URLs or paths relative to BaseURL/the channel base URL.
-type AssetLibraryEndpointSettings struct {
-	Enabled         bool   `json:"enabled,omitempty"`
-	BaseURL         string `json:"base_url,omitempty"`
-	ListPath        string `json:"list_path,omitempty"`
-	CreatePath      string `json:"create_path,omitempty"`
-	DetailPath      string `json:"detail_path,omitempty"`
-	AppendPath      string `json:"append_path,omitempty"`
-	ImportURLPath   string `json:"import_url_path,omitempty"`
-	ImportURLsPath  string `json:"import_urls_path,omitempty"`
-	DeleteAssetPath string `json:"delete_asset_path,omitempty"`
-}
-
 type ChannelOtherSettings struct {
 	AzureResponsesVersion                 string                        `json:"azure_responses_version,omitempty"`
 	VertexKeyType                         VertexKeyType                 `json:"vertex_key_type,omitempty"` // "json" or "api_key"
@@ -74,7 +60,6 @@ type ChannelOtherSettings struct {
 	UpstreamModelUpdateLastDetectedModels []string                      `json:"upstream_model_update_last_detected_models,omitempty"` // 上次检测到的可加入模型
 	UpstreamModelUpdateLastRemovedModels  []string                      `json:"upstream_model_update_last_removed_models,omitempty"`  // 上次检测到的可删除模型
 	UpstreamModelUpdateIgnoredModels      []string                      `json:"upstream_model_update_ignored_models,omitempty"`       // 手动忽略的模型
-	AssetLibrary                          *AssetLibraryEndpointSettings `json:"asset_library,omitempty"`
 }
 
 func (s *ChannelOtherSettings) IsOpenRouterEnterprise() bool {

@@ -3,109 +3,150 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/setting/system_setting"
+
+	"github.com/google/uuid"
 )
 
 const assetLibraryResponseLimit = 8 << 20
 
-type AssetLibraryChannel struct {
-	Id   int    `json:"id"`
-	Name string `json:"name"`
+// assetLibraryUploadDir stores client-uploaded files so they can be exposed as
+// public URLs. A volcengine-style CreateAsset only accepts a public URL (no
+// file/base64 upload), so we host the file locally under ./upload/asset (served
+// by router.Static("/upload", ...)) and hand the upstream that URL. OpenAI-style
+// upstreams instead read the stored file bytes and POST them to /v1/files.
+const (
+	assetLibraryUploadDir = "./upload/asset"
+	assetLibraryURLPrefix = "/upload/asset/"
+)
+
+// Volcengine action defaults, applied when an upstream leaves a field blank.
+const (
+	assetVolcDefaultVersion           = "2024-01-01"
+	assetVolcDefaultCreateGroupAction = "CreateAssetGroup"
+	assetVolcDefaultUpdateGroupAction = "UpdateAssetGroup"
+	assetVolcDefaultDeleteGroupAction = "DeleteAssetGroup"
+	assetVolcDefaultCreateAssetAction = "CreateAsset"
+	assetVolcDefaultGetAssetAction    = "GetAsset"
+	assetVolcDefaultUpdateAssetAction = "UpdateAsset"
+	assetVolcDefaultDeleteAssetAction = "DeleteAsset"
+)
+
+const assetOpenAIDefaultPurpose = "user_data"
+
+// AssetLibraryUpstreamBrief is the minimal upstream descriptor exposed to
+// ordinary users (for display), without secrets.
+type AssetLibraryUpstreamBrief struct {
+	Id     int64  `json:"id"`
+	Name   string `json:"name"`
+	Format string `json:"format"`
 }
 
-type upstreamAsset struct {
-	AssetId      string `json:"assetId"`
-	AssetName    string `json:"assetName"`
-	AssetURL     string `json:"assetUrl"`
-	AssetType    string `json:"assetType"`
-	Status       string `json:"status"`
-	ErrorCode    string `json:"errorCode"`
-	ErrorMessage string `json:"errorMessage"`
-	CreatedAt    int64  `json:"createdAt"`
-	UpdatedAt    int64  `json:"updatedAt"`
-}
-
-type upstreamGroup struct {
-	GroupId      string          `json:"groupId"`
-	DisplayName  string          `json:"displayName"`
-	Description  string          `json:"description"`
-	GroupType    string          `json:"groupType"`
-	CoverAssetId string          `json:"coverAssetId"`
-	CoverURL     string          `json:"coverUrl"`
-	Assets       []upstreamAsset `json:"assets"`
-}
-
-type upstreamBatch struct {
-	GroupId string          `json:"groupId"`
-	Assets  []upstreamAsset `json:"assets"`
-}
-
-type upstreamError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
-
-type upstreamGroupEnvelope struct {
-	Data      upstreamGroup  `json:"data"`
-	Error     *upstreamError `json:"error"`
-	RequestId string         `json:"request_id"`
-}
-
-type upstreamBatchEnvelope struct {
-	Data      upstreamBatch  `json:"data"`
-	Error     *upstreamError `json:"error"`
-	RequestId string         `json:"request_id"`
-}
-
-type assetChannelTarget struct {
-	Channel *model.Channel
-	Config  *dto.AssetLibraryEndpointSettings
-}
-
+// AssetLibraryOperationResult reports the outcome of one upstream during a
+// multi-upstream fan-out.
 type AssetLibraryOperationResult struct {
-	ChannelId   int    `json:"channel_id"`
-	ChannelName string `json:"channel_name"`
-	Success     bool   `json:"success"`
-	Message     string `json:"message,omitempty"`
+	UpstreamId   int64  `json:"upstream_id"`
+	UpstreamName string `json:"upstream_name"`
+	Success      bool   `json:"success"`
+	Message      string `json:"message,omitempty"`
 }
 
-func configuredAssetLibraryTargets() ([]assetChannelTarget, error) {
-	channels, err := model.GetAssetLibraryChannels()
+// ---- volcengine response envelope ----
+
+type volcResponseMetadata struct {
+	RequestId string     `json:"RequestId"`
+	Action    string     `json:"Action"`
+	Version   string     `json:"Version"`
+	Service   string     `json:"Service"`
+	Region    string     `json:"Region"`
+	Error     *volcError `json:"Error"`
+}
+
+type volcError struct {
+	Code    string `json:"Code"`
+	Message string `json:"Message"`
+}
+
+type volcEnvelope struct {
+	ResponseMetadata volcResponseMetadata `json:"ResponseMetadata"`
+	Result           json.RawMessage      `json:"Result"`
+}
+
+type volcIdResult struct {
+	Id string `json:"Id"`
+}
+
+type volcGetAssetResult struct {
+	Id           string `json:"Id"`
+	Name         string `json:"Name"`
+	AssetType    string `json:"AssetType"`
+	Status       string `json:"Status"`
+	URL          string `json:"URL"`
+	ErrorCode    string `json:"ErrorCode"`
+	ErrorMessage string `json:"ErrorMessage"`
+}
+
+// ---- openai Files API response ----
+
+type openAIFileObject struct {
+	Id       string `json:"id"`
+	Object   string `json:"object"`
+	Bytes    int64  `json:"bytes"`
+	Filename string `json:"filename"`
+	Purpose  string `json:"purpose"`
+	Status   string `json:"status"`
+}
+
+type openAIErrorEnvelope struct {
+	Error *struct {
+		Message string `json:"message"`
+		Type    string `json:"type"`
+		Code    string `json:"code"`
+	} `json:"error"`
+}
+
+// upstreamAssetResult is the normalized outcome of pushing/querying one asset on
+// one upstream, regardless of format.
+type upstreamAssetResult struct {
+	UpstreamAssetId string
+	AssetURL        string
+	Status          string
+	ErrorCode       string
+	ErrorMessage    string
+}
+
+// configuredAssetLibraryTargets returns all enabled upstreams.
+func configuredAssetLibraryTargets() ([]model.AssetLibraryUpstream, error) {
+	return model.ListEnabledAssetLibraryUpstreams()
+}
+
+// ListAssetLibraryUpstreamsForUser returns enabled upstreams as briefs for
+// display in the asset management page.
+func ListAssetLibraryUpstreamsForUser() ([]AssetLibraryUpstreamBrief, error) {
+	upstreams, err := configuredAssetLibraryTargets()
 	if err != nil {
 		return nil, err
 	}
-	targets := make([]assetChannelTarget, 0)
-	for _, channel := range channels {
-		settings := channel.GetOtherSettings()
-		if settings.AssetLibrary == nil || !settings.AssetLibrary.Enabled {
-			continue
-		}
-		targets = append(targets, assetChannelTarget{Channel: channel, Config: settings.AssetLibrary})
+	briefs := make([]AssetLibraryUpstreamBrief, 0, len(upstreams))
+	for i := range upstreams {
+		briefs = append(briefs, AssetLibraryUpstreamBrief{
+			Id: upstreams[i].Id, Name: upstreams[i].Name, Format: upstreams[i].Format,
+		})
 	}
-	return targets, nil
-}
-
-func ListAssetLibraryChannels() ([]AssetLibraryChannel, error) {
-	targets, err := configuredAssetLibraryTargets()
-	if err != nil {
-		return nil, err
-	}
-	channels := make([]AssetLibraryChannel, 0, len(targets))
-	for _, target := range targets {
-		channels = append(channels, AssetLibraryChannel{Id: target.Channel.Id, Name: target.Channel.Name})
-	}
-	return channels, nil
+	return briefs, nil
 }
 
 func ListAssetLibraryGroups(userId int) ([]model.AssetLibraryGroup, error) {
@@ -126,93 +167,71 @@ func GetAssetLibraryGroup(userId int, groupId int64) (*model.AssetLibraryGroup, 
 	return group, nil
 }
 
-func CreateAssetLibraryGroup(ctx context.Context, userId int, displayName string, files []*multipart.FileHeader) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
-	if len(files) == 0 {
-		return nil, nil, errors.New("at least one file is required")
-	}
-	if len(files) > 20 {
-		return nil, nil, errors.New("a maximum of 20 files can be uploaded at once")
-	}
-	if strings.TrimSpace(displayName) == "" {
-		displayName = strings.TrimSuffix(files[0].Filename, filepath.Ext(files[0].Filename))
+// CreateAssetLibraryGroup creates an empty asset group locally and, for every
+// volcengine upstream, an upstream asset group. OpenAI upstreams have no group
+// concept, so only a local mapping placeholder is recorded.
+func CreateAssetLibraryGroup(ctx context.Context, userId int, displayName string, groupType string, description string) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" {
+		return nil, nil, errors.New("display name is required")
 	}
 	if len([]rune(displayName)) > 64 {
 		return nil, nil, errors.New("display name must not exceed 64 characters")
 	}
+	description = strings.TrimSpace(description)
+	if len([]rune(description)) > 300 {
+		return nil, nil, errors.New("description must not exceed 300 characters")
+	}
+	if groupType == "" {
+		groupType = "AIGC"
+	}
 
-	targets, err := configuredAssetLibraryTargets()
+	upstreams, err := configuredAssetLibraryTargets()
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(targets) == 0 {
-		return nil, nil, errors.New("no asset library channel is configured")
+	if len(upstreams) == 0 {
+		return nil, nil, errors.New("no asset library upstream is configured")
 	}
 
 	group := &model.AssetLibraryGroup{
 		UserId:      userId,
 		DisplayName: displayName,
-		GroupType:   "AIGC",
-		Assets:      make([]model.AssetLibraryAsset, 0, len(files)),
-	}
-	for _, file := range files {
-		group.Assets = append(group.Assets, model.AssetLibraryAsset{
-			Name:      file.Filename,
-			AssetType: inferAssetType(file),
-		})
+		Description: description,
+		GroupType:   groupType,
+		Assets:      []model.AssetLibraryAsset{},
 	}
 	if err := model.CreateAssetLibraryGroup(group); err != nil {
 		return nil, nil, err
 	}
 
-	results := make([]AssetLibraryOperationResult, 0, len(targets))
-	for _, target := range targets {
-		upstream, uploadErr := uploadAssetFiles(ctx, target, target.Config.CreatePath, displayName, files)
-		mapping := &model.AssetLibraryGroupChannel{
-			GroupId:   group.Id,
-			UserId:    userId,
-			ChannelId: target.Channel.Id,
-			Status:    "Active",
+	results := make([]AssetLibraryOperationResult, 0, len(upstreams))
+	for i := range upstreams {
+		upstream := &upstreams[i]
+		mapping := &model.AssetLibraryGroupUpstream{
+			GroupId: group.Id, UserId: userId, UpstreamId: upstream.Id, Status: "Active",
 		}
-		result := AssetLibraryOperationResult{ChannelId: target.Channel.Id, ChannelName: target.Channel.Name, Success: uploadErr == nil}
-		if uploadErr != nil {
+		upstreamGroupId, groupErr := createGroupOnTarget(ctx, upstream, displayName, groupType)
+		result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: groupErr == nil}
+		if groupErr != nil {
 			mapping.Status = "Failed"
-			mapping.ErrorMessage = uploadErr.Error()
-			result.Message = uploadErr.Error()
+			mapping.ErrorMessage = groupErr.Error()
+			result.Message = groupErr.Error()
 		} else {
-			mapping.UpstreamGroupId = upstream.GroupId
-			if group.Description == "" {
-				group.Description = upstream.Description
-			}
-			if upstream.GroupType != "" {
-				group.GroupType = upstream.GroupType
-			}
-			if group.CoverURL == "" {
-				group.CoverURL = upstream.CoverURL
-			}
+			mapping.UpstreamGroupId = upstreamGroupId
 		}
-		if saveErr := model.SaveAssetLibraryGroupChannel(mapping); saveErr != nil {
-			return nil, results, saveErr
-		}
-		if uploadErr == nil {
-			if err := saveReturnedAssetMappings(userId, target, mapping, group.Assets, upstream.Assets); err != nil {
-				return nil, results, err
-			}
-		} else if err := saveFailedAssetMappings(userId, target, mapping, group.Assets, uploadErr); err != nil {
+		if err := model.SaveAssetLibraryGroupUpstream(mapping); err != nil {
 			return nil, results, err
 		}
 		results = append(results, result)
 	}
-	if err := model.UpdateAssetLibraryGroup(userId, group.Id, map[string]interface{}{
-		"description": group.Description,
-		"group_type":  group.GroupType,
-		"cover_url":   group.CoverURL,
-	}); err != nil {
-		return nil, results, err
-	}
+
 	created, err := GetAssetLibraryGroup(userId, group.Id)
 	return created, results, err
 }
 
+// AppendAssetLibraryFiles adds new assets to an existing group from uploaded
+// files.
 func AppendAssetLibraryFiles(ctx context.Context, userId int, groupId int64, files []*multipart.FileHeader) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
 	if len(files) == 0 {
 		return nil, nil, errors.New("at least one file is required")
@@ -220,181 +239,281 @@ func AppendAssetLibraryFiles(ctx context.Context, userId int, groupId int64, fil
 	if len(files) > 20 {
 		return nil, nil, errors.New("a maximum of 20 files can be uploaded at once")
 	}
+	stored, err := storeAssetFiles(files)
+	if err != nil {
+		return nil, nil, err
+	}
+	return appendAssetLibraryItems(ctx, userId, groupId, stored)
+}
+
+// AppendAssetLibraryURLs adds new assets to an existing group from public URLs.
+func AppendAssetLibraryURLs(ctx context.Context, userId int, groupId int64, items []AssetURLInput) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+	if len(items) == 0 {
+		return nil, nil, errors.New("at least one url is required")
+	}
+	if len(items) > 20 {
+		return nil, nil, errors.New("a maximum of 20 urls can be uploaded at once")
+	}
+	stored := make([]storedAssetFile, 0, len(items))
+	for _, item := range items {
+		publicURL := strings.TrimSpace(item.URL)
+		if publicURL == "" {
+			return nil, nil, errors.New("url must not be empty")
+		}
+		parsed, parseErr := url.Parse(publicURL)
+		if parseErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return nil, nil, errors.New("url must be a valid http or https URL")
+		}
+		name := strings.TrimSpace(item.Name)
+		if name == "" {
+			name = filepath.Base(parsed.Path)
+		}
+		if name == "" || name == "." || name == "/" {
+			name = publicURL
+		}
+		assetType := strings.TrimSpace(item.AssetType)
+		if assetType == "" {
+			assetType = inferAssetTypeFromName(name)
+		}
+		stored = append(stored, storedAssetFile{name: name, assetType: assetType, publicURL: publicURL})
+	}
+	return appendAssetLibraryItems(ctx, userId, groupId, stored)
+}
+
+// appendAssetLibraryItems persists the local asset rows and uploads each to
+// every configured upstream.
+func appendAssetLibraryItems(ctx context.Context, userId int, groupId int64, stored []storedAssetFile) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
 	group, err := model.GetAssetLibraryGroup(userId, groupId)
 	if err != nil {
 		return nil, nil, err
 	}
-	targets, err := configuredAssetLibraryTargets()
+	upstreams, err := configuredAssetLibraryTargets()
 	if err != nil {
 		return nil, nil, err
 	}
-	assets := make([]model.AssetLibraryAsset, 0, len(files))
-	for _, file := range files {
+
+	assets := make([]model.AssetLibraryAsset, 0, len(stored))
+	for _, item := range stored {
 		assets = append(assets, model.AssetLibraryAsset{
-			GroupId: group.Id, UserId: userId, Name: file.Filename, AssetType: inferAssetType(file),
+			GroupId: group.Id, UserId: userId, Name: item.name,
+			AssetType: item.assetType, SourceURL: item.publicURL,
+			FileSize: item.fileSize, MimeType: item.mimeType,
 		})
 	}
 	if err := model.CreateAssetLibraryAssets(assets); err != nil {
 		return nil, nil, err
 	}
-
-	mappingByChannel := make(map[int]*model.AssetLibraryGroupChannel, len(group.Mappings))
-	for i := range group.Mappings {
-		mappingByChannel[group.Mappings[i].ChannelId] = &group.Mappings[i]
+	for i := range stored {
+		stored[i].assetId = assets[i].Id
 	}
-	results := make([]AssetLibraryOperationResult, 0, len(targets))
-	for _, target := range targets {
-		groupMapping := mappingByChannel[target.Channel.Id]
-		endpointPath := target.Config.CreatePath
-		uploadDisplayName := group.DisplayName
-		if groupMapping == nil {
-			groupMapping = &model.AssetLibraryGroupChannel{
-				GroupId: group.Id, UserId: userId, ChannelId: target.Channel.Id,
+
+	groupMappingByUpstream := make(map[int64]*model.AssetLibraryGroupUpstream, len(group.Mappings))
+	for i := range group.Mappings {
+		groupMappingByUpstream[group.Mappings[i].UpstreamId] = &group.Mappings[i]
+	}
+
+	results := make([]AssetLibraryOperationResult, 0, len(upstreams))
+	for i := range upstreams {
+		upstream := &upstreams[i]
+		groupMapping := groupMappingByUpstream[upstream.Id]
+		if groupMapping == nil || (upstream.Format == model.AssetLibraryFormatVolcengine && groupMapping.UpstreamGroupId == "") {
+			// Upstream added after the group was created, or the group failed to
+			// be created: (re)create it now.
+			if groupMapping == nil {
+				groupMapping = &model.AssetLibraryGroupUpstream{
+					GroupId: group.Id, UserId: userId, UpstreamId: upstream.Id, Status: "Processing",
+				}
 			}
-		} else if groupMapping.UpstreamGroupId != "" {
-			endpointPath = expandAssetPath(target.Config.AppendPath, groupMapping.UpstreamGroupId, "")
-			uploadDisplayName = ""
-		}
-		upstream, uploadErr := uploadAssetFiles(ctx, target, endpointPath, uploadDisplayName, files)
-		result := AssetLibraryOperationResult{ChannelId: target.Channel.Id, ChannelName: target.Channel.Name, Success: uploadErr == nil}
-		if uploadErr != nil {
-			result.Message = uploadErr.Error()
-			groupMapping.Status = "Failed"
-			groupMapping.ErrorMessage = uploadErr.Error()
-		} else {
+			upstreamGroupId, groupErr := createGroupOnTarget(ctx, upstream, group.DisplayName, group.GroupType)
+			if groupErr != nil {
+				groupMapping.Status = "Failed"
+				groupMapping.ErrorMessage = groupErr.Error()
+				_ = model.SaveAssetLibraryGroupUpstream(groupMapping)
+				results = append(results, AssetLibraryOperationResult{
+					UpstreamId: upstream.Id, UpstreamName: upstream.Name,
+					Success: false, Message: groupErr.Error(),
+				})
+				continue
+			}
+			groupMapping.UpstreamGroupId = upstreamGroupId
 			groupMapping.Status = "Active"
 			groupMapping.ErrorMessage = ""
-			groupMapping.UpstreamGroupId = upstream.GroupId
+			_ = model.SaveAssetLibraryGroupUpstream(groupMapping)
 		}
-		if err := model.SaveAssetLibraryGroupChannel(groupMapping); err != nil {
-			return nil, results, err
-		}
-		if uploadErr == nil {
-			if err := saveReturnedAssetMappings(userId, target, groupMapping, assets, upstream.Assets); err != nil {
-				return nil, results, err
-			}
-		} else if err := saveFailedAssetMappings(userId, target, groupMapping, assets, uploadErr); err != nil {
-			return nil, results, err
-		}
+		result := uploadAssetsToTarget(ctx, userId, upstream, groupMapping, stored)
 		results = append(results, result)
 	}
+
 	updated, err := GetAssetLibraryGroup(userId, groupId)
 	return updated, results, err
 }
 
-func UpdateAssetLibraryGroup(ctx context.Context, userId int, groupId int64, displayName string) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+// UpdateAssetLibraryGroup renames the group locally.
+func UpdateAssetLibraryGroup(ctx context.Context, userId int, groupId int64, displayName string, description string) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
 	displayName = strings.TrimSpace(displayName)
 	if displayName == "" || len([]rune(displayName)) > 64 {
 		return nil, nil, errors.New("display name must contain 1 to 64 characters")
+	}
+	description = strings.TrimSpace(description)
+	if len([]rune(description)) > 300 {
+		return nil, nil, errors.New("description must not exceed 300 characters")
 	}
 	group, err := model.GetAssetLibraryGroup(userId, groupId)
 	if err != nil {
 		return nil, nil, err
 	}
-	targets, err := configuredAssetLibraryTargets()
+	upstreamById, err := enabledUpstreamMap()
 	if err != nil {
 		return nil, nil, err
 	}
-	targetById := make(map[int]assetChannelTarget, len(targets))
-	for _, target := range targets {
-		targetById[target.Channel.Id] = target
-	}
-	payload := map[string]string{"displayName": displayName}
+
+	// Propagate the rename to every upstream that has a group mapping.
 	results := make([]AssetLibraryOperationResult, 0, len(group.Mappings))
 	for i := range group.Mappings {
 		mapping := &group.Mappings[i]
-		target, ok := targetById[mapping.ChannelId]
+		upstream, ok := upstreamById[mapping.UpstreamId]
 		if !ok || mapping.UpstreamGroupId == "" {
 			continue
 		}
-		path := expandAssetPath(target.Config.DetailPath, mapping.UpstreamGroupId, "")
-		err := doAssetJSON(ctx, target, http.MethodPatch, path, payload, nil)
-		result := AssetLibraryOperationResult{ChannelId: target.Channel.Id, ChannelName: target.Channel.Name, Success: err == nil}
-		if err != nil {
-			result.Message = err.Error()
+		reqErr := updateGroupOnTarget(ctx, upstream, mapping.UpstreamGroupId, displayName)
+		result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: reqErr == nil}
+		if reqErr != nil {
+			result.Message = reqErr.Error()
 			mapping.Status = "Failed"
-			mapping.ErrorMessage = err.Error()
-		} else {
-			mapping.Status = "Active"
-			mapping.ErrorMessage = ""
-		}
-		if saveErr := model.SaveAssetLibraryGroupChannel(mapping); saveErr != nil {
-			return nil, results, saveErr
+			mapping.ErrorMessage = reqErr.Error()
+			_ = model.SaveAssetLibraryGroupUpstream(mapping)
 		}
 		results = append(results, result)
 	}
-	if err := model.UpdateAssetLibraryGroup(userId, groupId, map[string]interface{}{"display_name": displayName}); err != nil {
+
+	if err := model.UpdateAssetLibraryGroup(userId, groupId, map[string]interface{}{
+		"display_name": displayName,
+		"description":  description,
+	}); err != nil {
 		return nil, results, err
 	}
 	updated, err := GetAssetLibraryGroup(userId, groupId)
 	return updated, results, err
 }
 
-func RefreshAssetLibraryGroup(ctx context.Context, userId int, groupId int64) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+// UpdateAssetLibraryAsset renames a single asset locally and on every upstream
+// it was pushed to.
+func UpdateAssetLibraryAsset(ctx context.Context, userId int, groupId int64, assetId int64, name string) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len([]rune(name)) > 64 {
+		return nil, nil, errors.New("name must contain 1 to 64 characters")
+	}
 	group, err := model.GetAssetLibraryGroup(userId, groupId)
 	if err != nil {
 		return nil, nil, err
 	}
-	targets, err := configuredAssetLibraryTargets()
+	var asset *model.AssetLibraryAsset
+	for i := range group.Assets {
+		if group.Assets[i].Id == assetId {
+			asset = &group.Assets[i]
+			break
+		}
+	}
+	if asset == nil {
+		return nil, nil, errors.New("asset not found")
+	}
+	upstreamById, err := enabledUpstreamMap()
 	if err != nil {
 		return nil, nil, err
 	}
-	targetById := make(map[int]assetChannelTarget, len(targets))
-	for _, target := range targets {
-		targetById[target.Channel.Id] = target
-	}
-	results := make([]AssetLibraryOperationResult, 0, len(group.Mappings))
-	for i := range group.Mappings {
-		mapping := &group.Mappings[i]
-		target, ok := targetById[mapping.ChannelId]
-		if !ok || mapping.UpstreamGroupId == "" {
+
+	results := make([]AssetLibraryOperationResult, 0, len(asset.Mappings))
+	for i := range asset.Mappings {
+		mapping := &asset.Mappings[i]
+		upstream, ok := upstreamById[mapping.UpstreamId]
+		if !ok || mapping.UpstreamAssetId == "" {
 			continue
 		}
-		path := expandAssetPath(target.Config.DetailPath, mapping.UpstreamGroupId, "")
-		var envelope upstreamGroupEnvelope
-		requestErr := doAssetJSON(ctx, target, http.MethodGet, path, nil, &envelope)
-		result := AssetLibraryOperationResult{ChannelId: target.Channel.Id, ChannelName: target.Channel.Name, Success: requestErr == nil}
-		if requestErr != nil {
-			result.Message = requestErr.Error()
+		reqErr := updateAssetOnTarget(ctx, upstream, mapping.UpstreamAssetId, name)
+		result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: reqErr == nil}
+		if reqErr != nil {
+			result.Message = reqErr.Error()
 			mapping.Status = "Failed"
-			mapping.ErrorMessage = requestErr.Error()
-		} else {
-			mapping.Status = "Active"
-			mapping.ErrorMessage = ""
-			if envelope.Data.CoverURL != "" {
-				_ = model.UpdateAssetLibraryGroup(userId, groupId, map[string]interface{}{"cover_url": envelope.Data.CoverURL})
-			}
-			if err := updateReturnedAssetMappings(userId, target, mapping, group.Assets, envelope.Data.Assets); err != nil {
-				return nil, results, err
-			}
-		}
-		if err := model.SaveAssetLibraryGroupChannel(mapping); err != nil {
-			return nil, results, err
+			mapping.ErrorMessage = reqErr.Error()
+			_ = model.SaveAssetLibraryAssetUpstream(mapping)
 		}
 		results = append(results, result)
+	}
+
+	if err := model.UpdateAssetLibraryAsset(userId, assetId, map[string]interface{}{"name": name}); err != nil {
+		return nil, results, err
 	}
 	updated, err := GetAssetLibraryGroup(userId, groupId)
 	return updated, results, err
 }
 
+// RefreshAssetLibraryGroup polls every asset mapping so the stored status/URL
+// reflects the upstream processing state.
+func RefreshAssetLibraryGroup(ctx context.Context, userId int, groupId int64) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+	group, err := model.GetAssetLibraryGroup(userId, groupId)
+	if err != nil {
+		return nil, nil, err
+	}
+	upstreamById, err := enabledUpstreamMap()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	results := make([]AssetLibraryOperationResult, 0)
+	for i := range group.Assets {
+		asset := &group.Assets[i]
+		for j := range asset.Mappings {
+			mapping := &asset.Mappings[j]
+			upstream, ok := upstreamById[mapping.UpstreamId]
+			if !ok || mapping.UpstreamAssetId == "" {
+				continue
+			}
+			detail, reqErr := getAssetOnTarget(ctx, upstream, mapping.UpstreamAssetId)
+			result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: reqErr == nil}
+			if reqErr != nil {
+				result.Message = reqErr.Error()
+				mapping.Status = "Failed"
+				mapping.ErrorMessage = reqErr.Error()
+			} else {
+				mapping.Status = normalizeStatus(detail.Status)
+				mapping.ErrorCode = detail.ErrorCode
+				mapping.ErrorMessage = detail.ErrorMessage
+				if detail.AssetURL != "" {
+					mapping.AssetURL = detail.AssetURL
+				}
+			}
+			if err := model.SaveAssetLibraryAssetUpstream(mapping); err != nil {
+				return nil, results, err
+			}
+			results = append(results, result)
+		}
+	}
+	updated, err := GetAssetLibraryGroup(userId, groupId)
+	return updated, results, err
+}
+
+// DeleteAssetLibraryGroup deletes every asset from every upstream, then removes
+// the local records.
 func DeleteAssetLibraryGroup(ctx context.Context, userId int, groupId int64) ([]AssetLibraryOperationResult, error) {
 	group, err := model.GetAssetLibraryGroup(userId, groupId)
 	if err != nil {
 		return nil, err
 	}
-	targets, err := configuredAssetLibraryTargets()
+	// A group must be empty before it can be deleted; remove its assets first.
+	if len(group.Assets) > 0 {
+		return nil, errors.New("素材组中还有素材，请先删除全部素材后再删除素材组")
+	}
+	upstreamById, err := enabledUpstreamMap()
 	if err != nil {
 		return nil, err
 	}
-	targetById := make(map[int]assetChannelTarget, len(targets))
-	for _, target := range targets {
-		targetById[target.Channel.Id] = target
-	}
-	results := make([]AssetLibraryOperationResult, 0, len(group.Mappings))
+
+	// Remove the (now empty) group from every upstream that has a group mapping.
+	results := make([]AssetLibraryOperationResult, 0)
 	allSucceeded := true
 	for i := range group.Mappings {
 		mapping := &group.Mappings[i]
-		target, ok := targetById[mapping.ChannelId]
+		upstream, ok := upstreamById[mapping.UpstreamId]
 		if mapping.UpstreamGroupId == "" {
 			continue
 		}
@@ -402,24 +521,22 @@ func DeleteAssetLibraryGroup(ctx context.Context, userId int, groupId int64) ([]
 			allSucceeded = false
 			continue
 		}
-		path := expandAssetPath(target.Config.DetailPath, mapping.UpstreamGroupId, "")
-		requestErr := doAssetJSON(ctx, target, http.MethodDelete, path, nil, nil)
-		result := AssetLibraryOperationResult{ChannelId: target.Channel.Id, ChannelName: target.Channel.Name, Success: requestErr == nil}
-		if requestErr != nil {
+		reqErr := deleteGroupOnTarget(ctx, upstream, mapping.UpstreamGroupId)
+		result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: reqErr == nil}
+		if reqErr != nil {
 			allSucceeded = false
-			result.Message = requestErr.Error()
-			mapping.Status = "Failed"
-			mapping.ErrorMessage = requestErr.Error()
-			_ = model.SaveAssetLibraryGroupChannel(mapping)
+			result.Message = reqErr.Error()
 		}
 		results = append(results, result)
 	}
 	if !allSucceeded {
-		return results, errors.New("one or more upstream channels failed to delete the asset group")
+		return results, errors.New("one or more upstreams failed to delete the asset group")
 	}
 	return results, model.DeleteAssetLibraryGroup(userId, groupId)
 }
 
+// DeleteAssetLibraryAsset deletes a single asset from every upstream, then
+// removes the local record.
 func DeleteAssetLibraryAsset(ctx context.Context, userId int, groupId int64, assetId int64) ([]AssetLibraryOperationResult, error) {
 	group, err := model.GetAssetLibraryGroup(userId, groupId)
 	if err != nil {
@@ -435,277 +552,331 @@ func DeleteAssetLibraryAsset(ctx context.Context, userId int, groupId int64, ass
 	if asset == nil {
 		return nil, errors.New("asset not found")
 	}
-	targets, err := configuredAssetLibraryTargets()
+	upstreamById, err := enabledUpstreamMap()
 	if err != nil {
 		return nil, err
 	}
-	targetById := make(map[int]assetChannelTarget, len(targets))
-	groupMappingByChannel := make(map[int]model.AssetLibraryGroupChannel, len(group.Mappings))
-	for _, target := range targets {
-		targetById[target.Channel.Id] = target
-	}
-	for _, mapping := range group.Mappings {
-		groupMappingByChannel[mapping.ChannelId] = mapping
-	}
+
 	results := make([]AssetLibraryOperationResult, 0, len(asset.Mappings))
 	allSucceeded := true
 	for _, mapping := range asset.Mappings {
-		target, ok := targetById[mapping.ChannelId]
-		groupMapping, hasGroupMapping := groupMappingByChannel[mapping.ChannelId]
+		upstream, ok := upstreamById[mapping.UpstreamId]
 		if mapping.UpstreamAssetId == "" {
 			continue
 		}
-		if !ok || !hasGroupMapping || groupMapping.UpstreamGroupId == "" {
+		if !ok {
 			allSucceeded = false
 			continue
 		}
-		path := expandAssetPath(target.Config.DeleteAssetPath, groupMapping.UpstreamGroupId, mapping.UpstreamAssetId)
-		requestErr := doAssetJSON(ctx, target, http.MethodDelete, path, nil, nil)
-		result := AssetLibraryOperationResult{ChannelId: target.Channel.Id, ChannelName: target.Channel.Name, Success: requestErr == nil}
-		if requestErr != nil {
+		reqErr := deleteAssetOnTarget(ctx, upstream, mapping.UpstreamAssetId)
+		result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: reqErr == nil}
+		if reqErr != nil {
 			allSucceeded = false
-			result.Message = requestErr.Error()
-			mapping.Status = "Failed"
-			mapping.ErrorMessage = requestErr.Error()
-			_ = model.SaveAssetLibraryAssetChannel(&mapping)
+			result.Message = reqErr.Error()
 		}
 		results = append(results, result)
 	}
 	if !allSucceeded {
-		return results, errors.New("one or more upstream channels failed to delete the asset")
+		return results, errors.New("one or more upstreams failed to delete the asset")
 	}
+	removeLocalAssetFile(asset.SourceURL)
 	return results, model.DeleteAssetLibraryAsset(userId, groupId, assetId)
 }
 
-func decorateAssetLibraryGroups(groups []model.AssetLibraryGroup) {
-	for i := range groups {
-		decorateAssetLibraryGroup(&groups[i])
+func enabledUpstreamMap() (map[int64]*model.AssetLibraryUpstream, error) {
+	upstreams, err := configuredAssetLibraryTargets()
+	if err != nil {
+		return nil, err
 	}
+	byId := make(map[int64]*model.AssetLibraryUpstream, len(upstreams))
+	for i := range upstreams {
+		byId[upstreams[i].Id] = &upstreams[i]
+	}
+	return byId, nil
 }
 
-func decorateAssetLibraryGroup(group *model.AssetLibraryGroup) {
-	if group.Assets == nil {
-		group.Assets = []model.AssetLibraryAsset{}
+// ---- local file storage ----
+
+// storedAssetFile is a client asset persisted locally (for file uploads) and/or
+// referenced by a public URL (for URL imports), ready to push to upstreams.
+type storedAssetFile struct {
+	name      string
+	assetType string
+	publicURL string
+	localPath string
+	mimeType  string
+	fileSize  int64
+	assetId   int64
+}
+
+func storeAssetFiles(files []*multipart.FileHeader) ([]storedAssetFile, error) {
+	baseURL := strings.TrimRight(strings.TrimSpace(system_setting.ServerAddress), "/")
+	if err := os.MkdirAll(assetLibraryUploadDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create asset upload directory: %w", err)
 	}
-	if group.Mappings == nil {
-		group.Mappings = []model.AssetLibraryGroupChannel{}
-	}
-	for i := range group.Assets {
-		if group.Assets[i].Mappings == nil {
-			group.Assets[i].Mappings = []model.AssetLibraryAssetChannel{}
+	stored := make([]storedAssetFile, 0, len(files))
+	for _, fileHeader := range files {
+		ext := filepath.Ext(fileHeader.Filename)
+		filename := uuid.New().String() + ext
+		destPath := filepath.Join(assetLibraryUploadDir, filename)
+		if err := saveMultipartFile(fileHeader, destPath); err != nil {
+			return nil, err
 		}
-	}
-	ids := make(map[int]struct{})
-	for _, mapping := range group.Mappings {
-		ids[mapping.ChannelId] = struct{}{}
-	}
-	for _, asset := range group.Assets {
-		for _, mapping := range asset.Mappings {
-			ids[mapping.ChannelId] = struct{}{}
+		mimeType := fileHeader.Header.Get("Content-Type")
+		item := storedAssetFile{
+			name:      fileHeader.Filename,
+			assetType: inferAssetType(fileHeader),
+			localPath: destPath,
+			mimeType:  mimeType,
+			fileSize:  fileHeader.Size,
 		}
+		// Only expose a public URL when the server address is configured; some
+		// upstreams (volcengine) require it, but OpenAI uploads the bytes directly.
+		if baseURL != "" {
+			item.publicURL = baseURL + assetLibraryURLPrefix + filename
+		}
+		stored = append(stored, item)
 	}
-	channelIds := make([]int, 0, len(ids))
-	for id := range ids {
-		channelIds = append(channelIds, id)
+	return stored, nil
+}
+
+func saveMultipartFile(fileHeader *multipart.FileHeader, destPath string) error {
+	src, err := fileHeader.Open()
+	if err != nil {
+		return err
 	}
-	if len(channelIds) == 0 {
+	defer src.Close()
+	dst, err := os.Create(destPath)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+	if _, err := io.Copy(dst, src); err != nil {
+		return err
+	}
+	return nil
+}
+
+func removeLocalAssetFile(sourceURL string) {
+	if sourceURL == "" {
 		return
 	}
-	channels, _ := model.GetChannelsByIds(channelIds)
-	names := make(map[int]string, len(channels))
-	for _, channel := range channels {
-		names[channel.Id] = channel.Name
+	idx := strings.Index(sourceURL, assetLibraryURLPrefix)
+	if idx < 0 {
+		return
 	}
-	for i := range group.Mappings {
-		group.Mappings[i].ChannelName = names[group.Mappings[i].ChannelId]
+	filename := sourceURL[idx+len(assetLibraryURLPrefix):]
+	if filename == "" || strings.ContainsAny(filename, "/\\") {
+		return
 	}
-	for i := range group.Assets {
-		for j := range group.Assets[i].Mappings {
-			group.Assets[i].Mappings[j].ChannelName = names[group.Assets[i].Mappings[j].ChannelId]
-		}
+	_ = os.Remove(filepath.Join(assetLibraryUploadDir, filename))
+}
+
+// ---- per-target dispatch (format-aware) ----
+
+// createGroupOnTarget creates the upstream asset group. OpenAI upstreams have no
+// group concept and return an empty id.
+func createGroupOnTarget(ctx context.Context, upstream *model.AssetLibraryUpstream, name string, groupType string) (string, error) {
+	switch upstream.Format {
+	case model.AssetLibraryFormatOpenAI:
+		return "", nil
+	default:
+		return createVolcGroup(ctx, upstream, name, groupType)
 	}
 }
 
-func saveReturnedAssetMappings(userId int, target assetChannelTarget, groupMapping *model.AssetLibraryGroupChannel, assets []model.AssetLibraryAsset, upstreamAssets []upstreamAsset) error {
-	for i := range assets {
-		mapping := &model.AssetLibraryAssetChannel{
-			AssetId:        assets[i].Id,
-			GroupChannelId: groupMapping.Id,
-			UserId:         userId,
-			ChannelId:      target.Channel.Id,
-			Status:         "Failed",
-			ErrorMessage:   "upstream response did not include this asset",
-		}
-		if i < len(upstreamAssets) {
-			upstream := upstreamAssets[i]
-			mapping.UpstreamAssetId = upstream.AssetId
-			mapping.AssetURL = upstream.AssetURL
-			mapping.Status = upstream.Status
-			mapping.ErrorCode = upstream.ErrorCode
-			mapping.ErrorMessage = upstream.ErrorMessage
-			if upstream.AssetName != "" || upstream.AssetType != "" {
-				values := make(map[string]interface{})
-				if upstream.AssetName != "" {
-					values["name"] = upstream.AssetName
-				}
-				if upstream.AssetType != "" {
-					values["asset_type"] = upstream.AssetType
-				}
-				_ = model.UpdateAssetLibraryAsset(userId, assets[i].Id, values)
-			}
-		}
-		if mapping.Status == "" {
-			mapping.Status = "Processing"
-		}
-		if err := model.SaveAssetLibraryAssetChannel(mapping); err != nil {
-			return err
-		}
+// deleteGroupOnTarget removes a group from the upstream. OpenAI has no group
+// concept, so it is a no-op there.
+func deleteGroupOnTarget(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamGroupId string) error {
+	switch upstream.Format {
+	case model.AssetLibraryFormatOpenAI:
+		return nil
+	default:
+		return deleteVolcGroup(ctx, upstream, upstreamGroupId)
 	}
-	return nil
 }
 
-func saveFailedAssetMappings(userId int, target assetChannelTarget, groupMapping *model.AssetLibraryGroupChannel, assets []model.AssetLibraryAsset, uploadErr error) error {
-	for _, asset := range assets {
-		mapping := &model.AssetLibraryAssetChannel{
-			AssetId: asset.Id, GroupChannelId: groupMapping.Id, UserId: userId,
-			ChannelId: target.Channel.Id, Status: "Failed", ErrorMessage: uploadErr.Error(),
+func uploadAssetsToTarget(ctx context.Context, userId int, upstream *model.AssetLibraryUpstream, groupMapping *model.AssetLibraryGroupUpstream, items []storedAssetFile) AssetLibraryOperationResult {
+	result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: true}
+	for _, item := range items {
+		mapping := &model.AssetLibraryAssetUpstream{
+			AssetId: item.assetId, GroupUpstreamId: groupMapping.Id, UserId: userId,
+			UpstreamId: upstream.Id, AssetURL: item.publicURL,
 		}
-		if err := model.SaveAssetLibraryAssetChannel(mapping); err != nil {
-			return err
+		upstreamResult, uploadErr := createAssetOnTarget(ctx, upstream, groupMapping.UpstreamGroupId, item)
+		if uploadErr != nil {
+			mapping.Status = "Failed"
+			mapping.ErrorMessage = uploadErr.Error()
+			result.Success = false
+			if result.Message == "" {
+				result.Message = uploadErr.Error()
+			}
+		} else {
+			mapping.UpstreamAssetId = upstreamResult.UpstreamAssetId
+			mapping.Status = normalizeStatus(upstreamResult.Status)
+			if upstreamResult.AssetURL != "" {
+				mapping.AssetURL = upstreamResult.AssetURL
+			}
+		}
+		if err := model.SaveAssetLibraryAssetUpstream(mapping); err != nil {
+			result.Success = false
+			result.Message = err.Error()
 		}
 	}
-	return nil
+	return result
 }
 
-func updateReturnedAssetMappings(userId int, target assetChannelTarget, groupMapping *model.AssetLibraryGroupChannel, assets []model.AssetLibraryAsset, upstreamAssets []upstreamAsset) error {
-	localByUpstreamId := make(map[string]model.AssetLibraryAsset)
-	for _, asset := range assets {
-		for _, mapping := range asset.Mappings {
-			if mapping.ChannelId == target.Channel.Id && mapping.UpstreamAssetId != "" {
-				localByUpstreamId[mapping.UpstreamAssetId] = asset
-			}
-		}
+func createAssetOnTarget(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamGroupId string, item storedAssetFile) (*upstreamAssetResult, error) {
+	switch upstream.Format {
+	case model.AssetLibraryFormatOpenAI:
+		return createOpenAIFile(ctx, upstream, item)
+	default:
+		return createVolcAsset(ctx, upstream, upstreamGroupId, item)
 	}
-	for _, upstream := range upstreamAssets {
-		asset, ok := localByUpstreamId[upstream.AssetId]
-		if !ok {
-			continue
-		}
-		mapping := &model.AssetLibraryAssetChannel{
-			AssetId: asset.Id, GroupChannelId: groupMapping.Id, UserId: userId,
-			ChannelId: target.Channel.Id, UpstreamAssetId: upstream.AssetId,
-			AssetURL: upstream.AssetURL, Status: upstream.Status,
-			ErrorCode: upstream.ErrorCode, ErrorMessage: upstream.ErrorMessage,
-		}
-		if mapping.Status == "" {
-			mapping.Status = "Processing"
-		}
-		if err := model.SaveAssetLibraryAssetChannel(mapping); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
-func uploadAssetFiles(ctx context.Context, target assetChannelTarget, endpointPath string, displayName string, files []*multipart.FileHeader) (*upstreamGroup, error) {
-	if strings.TrimSpace(endpointPath) == "" {
-		return nil, errors.New("asset upload endpoint is not configured")
+func getAssetOnTarget(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamAssetId string) (*upstreamAssetResult, error) {
+	switch upstream.Format {
+	case model.AssetLibraryFormatOpenAI:
+		return getOpenAIFile(ctx, upstream, upstreamAssetId)
+	default:
+		return getVolcAsset(ctx, upstream, upstreamAssetId)
 	}
-	requestURL, err := resolveAssetURL(target, endpointPath)
-	if err != nil {
-		return nil, err
-	}
-	key, _, keyErr := target.Channel.GetNextEnabledKey()
-	if keyErr != nil {
-		return nil, keyErr
-	}
-
-	reader, writer := io.Pipe()
-	multipartWriter := multipart.NewWriter(writer)
-	writeErr := make(chan error, 1)
-	go func() {
-		defer close(writeErr)
-		if displayName != "" {
-			if err := multipartWriter.WriteField("displayName", displayName); err != nil {
-				_ = writer.CloseWithError(err)
-				writeErr <- err
-				return
-			}
-		}
-		for _, fileHeader := range files {
-			file, err := fileHeader.Open()
-			if err != nil {
-				_ = writer.CloseWithError(err)
-				writeErr <- err
-				return
-			}
-			part, err := multipartWriter.CreateFormFile("files", fileHeader.Filename)
-			if err == nil {
-				_, err = io.Copy(part, file)
-			}
-			_ = file.Close()
-			if err != nil {
-				_ = writer.CloseWithError(err)
-				writeErr <- err
-				return
-			}
-		}
-		if err := multipartWriter.Close(); err != nil {
-			_ = writer.CloseWithError(err)
-			writeErr <- err
-			return
-		}
-		writeErr <- writer.Close()
-	}()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, reader)
-	if err != nil {
-		_ = reader.CloseWithError(err)
-		return nil, err
-	}
-	req.Header.Set("Content-Type", multipartWriter.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+key)
-	resp, err := GetHttpClient().Do(req)
-	writerErr := <-writeErr
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if writerErr != nil {
-		return nil, writerErr
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, assetLibraryResponseLimit))
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, upstreamAssetError(resp.StatusCode, body)
-	}
-	var groupEnvelope upstreamGroupEnvelope
-	if err := common.Unmarshal(body, &groupEnvelope); err == nil && groupEnvelope.Data.GroupId != "" {
-		if groupEnvelope.Error != nil {
-			return nil, errors.New(groupEnvelope.Error.Message)
-		}
-		return &groupEnvelope.Data, nil
-	}
-	var batchEnvelope upstreamBatchEnvelope
-	if err := common.Unmarshal(body, &batchEnvelope); err != nil {
-		return nil, err
-	}
-	if batchEnvelope.Error != nil {
-		return nil, errors.New(batchEnvelope.Error.Message)
-	}
-	if batchEnvelope.Data.GroupId == "" {
-		return nil, errors.New("upstream response is missing groupId")
-	}
-	return &upstreamGroup{GroupId: batchEnvelope.Data.GroupId, Assets: batchEnvelope.Data.Assets}, nil
 }
 
-func doAssetJSON(ctx context.Context, target assetChannelTarget, method string, endpointPath string, payload interface{}, output interface{}) error {
-	if strings.TrimSpace(endpointPath) == "" {
-		return errors.New("asset endpoint is not configured")
+func deleteAssetOnTarget(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamAssetId string) error {
+	switch upstream.Format {
+	case model.AssetLibraryFormatOpenAI:
+		return deleteOpenAIFile(ctx, upstream, upstreamAssetId)
+	default:
+		return deleteVolcAsset(ctx, upstream, upstreamAssetId)
 	}
-	requestURL, err := resolveAssetURL(target, endpointPath)
+}
+
+// updateAssetOnTarget renames an asset on the upstream. OpenAI's Files API has no
+// rename operation, so it is a no-op there.
+func updateAssetOnTarget(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamAssetId string, name string) error {
+	switch upstream.Format {
+	case model.AssetLibraryFormatOpenAI:
+		return nil
+	default:
+		return updateVolcAsset(ctx, upstream, upstreamAssetId, name)
+	}
+}
+
+// updateGroupOnTarget renames a group on the upstream. OpenAI has no group
+// concept, so it is a no-op there.
+func updateGroupOnTarget(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamGroupId string, name string) error {
+	switch upstream.Format {
+	case model.AssetLibraryFormatOpenAI:
+		return nil
+	default:
+		return updateVolcGroup(ctx, upstream, upstreamGroupId, name)
+	}
+}
+
+// ---- volcengine implementation ----
+
+func createVolcGroup(ctx context.Context, upstream *model.AssetLibraryUpstream, name string, groupType string) (string, error) {
+	payload := map[string]interface{}{"Name": name, "GroupType": groupType}
+	if upstream.ProjectName != "" {
+		payload["ProjectName"] = upstream.ProjectName
+	}
+	var result volcIdResult
+	action := firstNonEmpty(upstream.CreateGroupAction, assetVolcDefaultCreateGroupAction)
+	if err := doVolcAction(ctx, upstream, action, payload, &result); err != nil {
+		return "", err
+	}
+	if result.Id == "" {
+		return "", errors.New("upstream did not return a group id")
+	}
+	return result.Id, nil
+}
+
+func createVolcAsset(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamGroupId string, item storedAssetFile) (*upstreamAssetResult, error) {
+	if item.publicURL == "" {
+		return nil, errors.New("server address is not configured; cannot expose a public URL for the volcengine upstream")
+	}
+	payload := map[string]interface{}{
+		"GroupId":   upstreamGroupId,
+		"URL":       item.publicURL,
+		"AssetType": item.assetType,
+		"Name":      truncateAssetName(item.name),
+	}
+	if upstream.ProjectName != "" {
+		payload["ProjectName"] = upstream.ProjectName
+	}
+	var result volcIdResult
+	action := firstNonEmpty(upstream.CreateAssetAction, assetVolcDefaultCreateAssetAction)
+	if err := doVolcAction(ctx, upstream, action, payload, &result); err != nil {
+		return nil, err
+	}
+	if result.Id == "" {
+		return nil, errors.New("upstream did not return an asset id")
+	}
+	// CreateAsset is async; the asset stays Processing until GetAsset confirms it.
+	return &upstreamAssetResult{UpstreamAssetId: result.Id, Status: "Processing"}, nil
+}
+
+func getVolcAsset(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamAssetId string) (*upstreamAssetResult, error) {
+	payload := map[string]interface{}{"Id": upstreamAssetId}
+	if upstream.ProjectName != "" {
+		payload["ProjectName"] = upstream.ProjectName
+	}
+	var result volcGetAssetResult
+	action := firstNonEmpty(upstream.GetAssetAction, assetVolcDefaultGetAssetAction)
+	if err := doVolcAction(ctx, upstream, action, payload, &result); err != nil {
+		return nil, err
+	}
+	return &upstreamAssetResult{
+		UpstreamAssetId: result.Id, AssetURL: result.URL, Status: result.Status,
+		ErrorCode: result.ErrorCode, ErrorMessage: result.ErrorMessage,
+	}, nil
+}
+
+func deleteVolcAsset(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamAssetId string) error {
+	payload := map[string]interface{}{"Id": upstreamAssetId}
+	if upstream.ProjectName != "" {
+		payload["ProjectName"] = upstream.ProjectName
+	}
+	action := firstNonEmpty(upstream.DeleteAssetAction, assetVolcDefaultDeleteAssetAction)
+	return doVolcAction(ctx, upstream, action, payload, nil)
+}
+
+func updateVolcAsset(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamAssetId string, name string) error {
+	payload := map[string]interface{}{"Id": upstreamAssetId, "Name": truncateAssetName(name)}
+	if upstream.ProjectName != "" {
+		payload["ProjectName"] = upstream.ProjectName
+	}
+	action := firstNonEmpty(upstream.UpdateAssetAction, assetVolcDefaultUpdateAssetAction)
+	return doVolcAction(ctx, upstream, action, payload, nil)
+}
+
+func updateVolcGroup(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamGroupId string, name string) error {
+	payload := map[string]interface{}{"Id": upstreamGroupId, "Name": name}
+	if upstream.ProjectName != "" {
+		payload["ProjectName"] = upstream.ProjectName
+	}
+	action := firstNonEmpty(upstream.UpdateGroupAction, assetVolcDefaultUpdateGroupAction)
+	return doVolcAction(ctx, upstream, action, payload, nil)
+}
+
+func deleteVolcGroup(ctx context.Context, upstream *model.AssetLibraryUpstream, upstreamGroupId string) error {
+	payload := map[string]interface{}{"Id": upstreamGroupId}
+	if upstream.ProjectName != "" {
+		payload["ProjectName"] = upstream.ProjectName
+	}
+	action := firstNonEmpty(upstream.DeleteGroupAction, assetVolcDefaultDeleteGroupAction)
+	return doVolcAction(ctx, upstream, action, payload, nil)
+}
+
+// doVolcAction performs one volcengine query-action request and decodes the
+// {"ResponseMetadata":{...},"Result":{...}} envelope.
+func doVolcAction(ctx context.Context, upstream *model.AssetLibraryUpstream, action string, payload interface{}, output interface{}) error {
+	if strings.TrimSpace(action) == "" {
+		return errors.New("asset action is not configured")
+	}
+	requestURL, err := buildVolcActionURL(upstream, action)
 	if err != nil {
 		return err
 	}
@@ -717,18 +888,165 @@ func doAssetJSON(ctx context.Context, target assetChannelTarget, method string, 
 		}
 		body = bytes.NewReader(encoded)
 	}
-	key, _, keyErr := target.Channel.GetNextEnabledKey()
-	if keyErr != nil {
-		return keyErr
-	}
-	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, body)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+key)
-	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+upstream.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := GetHttpClient().Do(req)
+	if err != nil {
+		return err
 	}
+	defer resp.Body.Close()
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, assetLibraryResponseLimit))
+	if err != nil {
+		return err
+	}
+
+	var envelope volcEnvelope
+	parseErr := common.Unmarshal(responseBody, &envelope)
+	if parseErr == nil && envelope.ResponseMetadata.Error != nil {
+		return volcBusinessError(envelope.ResponseMetadata.Error)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return upstreamHTTPError(resp.StatusCode, responseBody)
+	}
+	if parseErr != nil {
+		return parseErr
+	}
+	if output != nil && len(envelope.Result) > 0 && string(envelope.Result) != "null" {
+		if err := common.Unmarshal(envelope.Result, output); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func buildVolcActionURL(upstream *model.AssetLibraryUpstream, action string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(upstream.BaseURL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", errors.New("asset library base URL is invalid")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", errors.New("asset library base URL must use http or https")
+	}
+	query := parsed.Query()
+	query.Set("Action", action)
+	query.Set("Version", firstNonEmpty(upstream.Version, assetVolcDefaultVersion))
+	parsed.RawQuery = query.Encode()
+	return parsed.String(), nil
+}
+
+func volcBusinessError(e *volcError) error {
+	message := strings.TrimSpace(e.Message)
+	if message == "" {
+		message = strings.TrimSpace(e.Code)
+	}
+	if message == "" {
+		message = "upstream asset operation failed"
+	}
+	return errors.New(message)
+}
+
+// ---- openai Files API implementation ----
+
+func createOpenAIFile(ctx context.Context, upstream *model.AssetLibraryUpstream, item storedAssetFile) (*upstreamAssetResult, error) {
+	reader, filename, err := openAssetContent(item)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	var requestBody bytes.Buffer
+	writer := multipart.NewWriter(&requestBody)
+	purpose := firstNonEmpty(upstream.Purpose, assetOpenAIDefaultPurpose)
+	if err := writer.WriteField("purpose", purpose); err != nil {
+		return nil, err
+	}
+	part, err := writer.CreateFormFile("file", filename)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.Copy(part, reader); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	requestURL, err := buildOpenAIURL(upstream, "files")
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, &requestBody)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+upstream.APIKey)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	resp, err := GetHttpClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, assetLibraryResponseLimit))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, openAIError(resp.StatusCode, responseBody)
+	}
+	var file openAIFileObject
+	if err := common.Unmarshal(responseBody, &file); err != nil {
+		return nil, err
+	}
+	if file.Id == "" {
+		return nil, errors.New("upstream did not return a file id")
+	}
+	// Files are immediately usable; treat as Active unless the upstream reports otherwise.
+	return &upstreamAssetResult{UpstreamAssetId: file.Id, Status: normalizeOpenAIStatus(file.Status), AssetURL: item.publicURL}, nil
+}
+
+func getOpenAIFile(ctx context.Context, upstream *model.AssetLibraryUpstream, fileId string) (*upstreamAssetResult, error) {
+	requestURL, err := buildOpenAIURL(upstream, "files/"+url.PathEscape(fileId))
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+upstream.APIKey)
+	resp, err := GetHttpClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, assetLibraryResponseLimit))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, openAIError(resp.StatusCode, responseBody)
+	}
+	var file openAIFileObject
+	if err := common.Unmarshal(responseBody, &file); err != nil {
+		return nil, err
+	}
+	return &upstreamAssetResult{UpstreamAssetId: file.Id, Status: normalizeOpenAIStatus(file.Status)}, nil
+}
+
+func deleteOpenAIFile(ctx context.Context, upstream *model.AssetLibraryUpstream, fileId string) error {
+	requestURL, err := buildOpenAIURL(upstream, "files/"+url.PathEscape(fileId))
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, requestURL, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+upstream.APIKey)
 	resp, err := GetHttpClient().Do(req)
 	if err != nil {
 		return err
@@ -739,36 +1057,73 @@ func doAssetJSON(ctx context.Context, target assetChannelTarget, method string, 
 		return err
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return upstreamAssetError(resp.StatusCode, responseBody)
-	}
-	var errorEnvelope struct {
-		Error *upstreamError `json:"error"`
-	}
-	if err := common.Unmarshal(responseBody, &errorEnvelope); err == nil && errorEnvelope.Error != nil {
-		message := strings.TrimSpace(errorEnvelope.Error.Message)
-		if message == "" {
-			message = strings.TrimSpace(errorEnvelope.Error.Code)
-		}
-		if message == "" {
-			message = "upstream asset operation failed"
-		}
-		return errors.New(message)
-	}
-	if output != nil && len(responseBody) > 0 {
-		if err := common.Unmarshal(responseBody, output); err != nil {
-			return err
-		}
+		return openAIError(resp.StatusCode, responseBody)
 	}
 	return nil
 }
 
-func upstreamAssetError(status int, body []byte) error {
-	var envelope struct {
-		Error *upstreamError `json:"error"`
+func buildOpenAIURL(upstream *model.AssetLibraryUpstream, path string) (string, error) {
+	base := strings.TrimSpace(upstream.BaseURL)
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", errors.New("asset library base URL is invalid")
 	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", errors.New("asset library base URL must use http or https")
+	}
+	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(path, "/"), nil
+}
+
+func normalizeOpenAIStatus(status string) string {
+	switch strings.ToLower(status) {
+	case "processed", "uploaded", "":
+		return "Active"
+	case "error":
+		return "Failed"
+	default:
+		return status
+	}
+}
+
+func openAIError(status int, body []byte) error {
+	var envelope openAIErrorEnvelope
 	if err := common.Unmarshal(body, &envelope); err == nil && envelope.Error != nil && envelope.Error.Message != "" {
 		return fmt.Errorf("upstream returned %d: %s", status, envelope.Error.Message)
 	}
+	return upstreamHTTPError(status, body)
+}
+
+// openAssetContent opens the asset's bytes: the stored local file when present,
+// otherwise the public URL (for URL imports).
+func openAssetContent(item storedAssetFile) (io.ReadCloser, string, error) {
+	if item.localPath != "" {
+		f, err := os.Open(item.localPath)
+		if err != nil {
+			return nil, "", err
+		}
+		return f, item.name, nil
+	}
+	if item.publicURL == "" {
+		return nil, "", errors.New("asset has no local file or public URL")
+	}
+	resp, err := GetHttpClient().Get(item.publicURL)
+	if err != nil {
+		return nil, "", err
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		resp.Body.Close()
+		return nil, "", fmt.Errorf("failed to download asset URL: status %d", resp.StatusCode)
+	}
+	name := item.name
+	if name == "" {
+		name = filepath.Base(item.publicURL)
+	}
+	return resp.Body, name, nil
+}
+
+// ---- shared helpers ----
+
+func upstreamHTTPError(status int, body []byte) error {
 	message := strings.TrimSpace(string(body))
 	if len(message) > 300 {
 		message = message[:300]
@@ -779,31 +1134,70 @@ func upstreamAssetError(status int, body []byte) error {
 	return fmt.Errorf("upstream returned %d: %s", status, message)
 }
 
-func resolveAssetURL(target assetChannelTarget, endpointPath string) (string, error) {
-	if parsed, err := url.Parse(endpointPath); err == nil && parsed.IsAbs() {
-		if parsed.Scheme != "http" && parsed.Scheme != "https" {
-			return "", errors.New("asset endpoint must use http or https")
-		}
-		return parsed.String(), nil
+func normalizeStatus(status string) string {
+	if status == "" {
+		return "Processing"
 	}
-	baseURL := strings.TrimSpace(target.Config.BaseURL)
-	if baseURL == "" {
-		baseURL = target.Channel.GetBaseURL()
-	}
-	parsedBase, err := url.Parse(baseURL)
-	if err != nil || parsedBase.Scheme == "" || parsedBase.Host == "" {
-		return "", errors.New("asset library base URL is invalid")
-	}
-	if parsedBase.Scheme != "http" && parsedBase.Scheme != "https" {
-		return "", errors.New("asset library base URL must use http or https")
-	}
-	return strings.TrimRight(baseURL, "/") + "/" + strings.TrimLeft(endpointPath, "/"), nil
+	return status
 }
 
-func expandAssetPath(path string, groupId string, assetId string) string {
-	path = strings.ReplaceAll(path, "{groupId}", url.PathEscape(groupId))
-	path = strings.ReplaceAll(path, "{assetId}", url.PathEscape(assetId))
-	return path
+func truncateAssetName(name string) string {
+	runes := []rune(name)
+	if len(runes) > 64 {
+		return string(runes[:64])
+	}
+	return name
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func decorateAssetLibraryGroups(groups []model.AssetLibraryGroup) {
+	names := upstreamNameMap()
+	for i := range groups {
+		decorateAssetLibraryGroupWithNames(&groups[i], names)
+	}
+}
+
+func decorateAssetLibraryGroup(group *model.AssetLibraryGroup) {
+	decorateAssetLibraryGroupWithNames(group, upstreamNameMap())
+}
+
+func upstreamNameMap() map[int64]string {
+	upstreams, _ := model.ListAssetLibraryUpstreams()
+	names := make(map[int64]string, len(upstreams))
+	for i := range upstreams {
+		names[upstreams[i].Id] = upstreams[i].Name
+	}
+	return names
+}
+
+func decorateAssetLibraryGroupWithNames(group *model.AssetLibraryGroup, names map[int64]string) {
+	if group.Assets == nil {
+		group.Assets = []model.AssetLibraryAsset{}
+	}
+	if group.Mappings == nil {
+		group.Mappings = []model.AssetLibraryGroupUpstream{}
+	}
+	for i := range group.Assets {
+		if group.Assets[i].Mappings == nil {
+			group.Assets[i].Mappings = []model.AssetLibraryAssetUpstream{}
+		}
+	}
+	for i := range group.Mappings {
+		group.Mappings[i].UpstreamName = names[group.Mappings[i].UpstreamId]
+	}
+	for i := range group.Assets {
+		for j := range group.Assets[i].Mappings {
+			group.Assets[i].Mappings[j].UpstreamName = names[group.Assets[i].Mappings[j].UpstreamId]
+		}
+	}
 }
 
 func inferAssetType(file *multipart.FileHeader) string {
@@ -816,9 +1210,21 @@ func inferAssetType(file *multipart.FileHeader) string {
 	case strings.HasPrefix(contentType, "video/"):
 		return "Video"
 	}
-	ext := strings.ToLower(filepath.Ext(file.Filename))
+	return inferAssetTypeFromName(file.Filename)
+}
+
+// AssetURLInput describes a single public-URL asset to import into a group.
+type AssetURLInput struct {
+	URL       string `json:"url"`
+	Name      string `json:"name"`
+	AssetType string `json:"asset_type"`
+}
+
+// inferAssetTypeFromName guesses the asset type from a file name/URL extension.
+func inferAssetTypeFromName(name string) string {
+	ext := strings.ToLower(filepath.Ext(name))
 	switch ext {
-	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp":
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff", ".heic", ".heif":
 		return "Image"
 	case ".mp3", ".wav", ".aac", ".m4a", ".flac", ".ogg":
 		return "Audio"

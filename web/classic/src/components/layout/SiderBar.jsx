@@ -120,7 +120,7 @@ const SiderBar = ({ onNavigate = () => {} }) => {
           localStorage.getItem('enable_task') === 'true' ? '' : 'tableHiddle',
       },
       {
-        text: t('素材库'),
+        text: t('素材管理'),
         itemKey: 'assets',
         to: '/console/assets',
         className:

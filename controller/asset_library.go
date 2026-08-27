@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 
@@ -20,26 +21,68 @@ const assetLibraryMultipartOverhead = int64(20 << 20)
 
 type updateAssetLibraryGroupRequest struct {
 	DisplayName string `json:"display_name"`
+	Description string `json:"description"`
+}
+
+type updateAssetLibraryAssetRequest struct {
+	Name string `json:"name"`
+}
+
+type createAssetLibraryGroupRequest struct {
+	DisplayName string `json:"display_name"`
+	GroupType   string `json:"group_type"`
+	Description string `json:"description"`
+}
+
+type appendAssetLibraryURLsRequest struct {
+	Assets []service.AssetURLInput `json:"assets"`
 }
 
 func ensureAssetLibraryEnabled(c *gin.Context) bool {
-	if operation_setting.AssetLibraryEnabled {
+	if isAssetLibraryEnabled() {
 		return true
 	}
 	c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "asset library is disabled"})
 	return false
 }
 
+// isAssetLibraryEnabled is intentionally shared by the status endpoint and all
+// asset-library handlers so the navigation state cannot drift from API access.
+// SidebarModulesAdmin is the source of truth after the setting was moved from
+// Operations to the admin sidebar configuration. The legacy option is only
+// used when no sidebar configuration has ever been saved.
+func isAssetLibraryEnabled() bool {
+	common.OptionMapRWMutex.RLock()
+	raw := common.OptionMap["SidebarModulesAdmin"]
+	common.OptionMapRWMutex.RUnlock()
+
+	if strings.TrimSpace(raw) != "" {
+		var config map[string]map[string]bool
+		if err := common.UnmarshalJsonStr(raw, &config); err == nil {
+			console, ok := config["console"]
+			if !ok {
+				return false
+			}
+			return console["enabled"] && console["assets"]
+		}
+		return false
+	}
+
+	// Existing installations may not have SidebarModulesAdmin yet. Preserve
+	// their previous choice until an administrator saves the new setting.
+	return operation_setting.AssetLibraryEnabled
+}
+
 func GetAssetLibraryChannels(c *gin.Context) {
 	if !ensureAssetLibraryEnabled(c) {
 		return
 	}
-	channels, err := service.ListAssetLibraryChannels()
+	upstreams, err := service.ListAssetLibraryUpstreamsForUser()
 	if err != nil {
 		assetLibraryError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": channels})
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": upstreams})
 }
 
 func GetAssetLibraryGroups(c *gin.Context) {
@@ -75,13 +118,13 @@ func PostAssetLibraryGroup(c *gin.Context) {
 	if !ensureAssetLibraryEnabled(c) {
 		return
 	}
-	files, cleanup, ok := assetLibraryFiles(c)
-	if !ok {
+	var request createAssetLibraryGroupRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid request body"})
 		return
 	}
-	defer cleanup()
 	group, results, err := service.CreateAssetLibraryGroup(
-		c.Request.Context(), c.GetInt("id"), strings.TrimSpace(c.PostForm("display_name")), files,
+		c.Request.Context(), c.GetInt("id"), strings.TrimSpace(request.DisplayName), strings.TrimSpace(request.GroupType), strings.TrimSpace(request.Description),
 	)
 	if err != nil {
 		assetLibraryErrorWithData(c, err, results)
@@ -99,6 +142,23 @@ func PostAssetLibraryGroupAssets(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid asset group id"})
 		return
 	}
+
+	// A JSON body imports public URLs; a multipart body uploads local files.
+	if strings.HasPrefix(c.ContentType(), "application/json") {
+		var request appendAssetLibraryURLsRequest
+		if err := c.ShouldBindJSON(&request); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid request body"})
+			return
+		}
+		group, results, err := service.AppendAssetLibraryURLs(c.Request.Context(), c.GetInt("id"), groupId, request.Assets)
+		if err != nil {
+			assetLibraryErrorWithData(c, err, results)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"group": group, "results": results}})
+		return
+	}
+
 	files, cleanup, ok := assetLibraryFiles(c)
 	if !ok {
 		return
@@ -126,7 +186,7 @@ func PatchAssetLibraryGroup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid request body"})
 		return
 	}
-	group, results, err := service.UpdateAssetLibraryGroup(c.Request.Context(), c.GetInt("id"), groupId, request.DisplayName)
+	group, results, err := service.UpdateAssetLibraryGroup(c.Request.Context(), c.GetInt("id"), groupId, request.DisplayName, request.Description)
 	if err != nil {
 		assetLibraryErrorWithData(c, err, results)
 		return
@@ -144,6 +204,29 @@ func PostRefreshAssetLibraryGroup(c *gin.Context) {
 		return
 	}
 	group, results, err := service.RefreshAssetLibraryGroup(c.Request.Context(), c.GetInt("id"), groupId)
+	if err != nil {
+		assetLibraryErrorWithData(c, err, results)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"group": group, "results": results}})
+}
+
+func PatchAssetLibraryAsset(c *gin.Context) {
+	if !ensureAssetLibraryEnabled(c) {
+		return
+	}
+	groupId, groupErr := strconv.ParseInt(c.Param("id"), 10, 64)
+	assetId, assetErr := strconv.ParseInt(c.Param("assetId"), 10, 64)
+	if groupErr != nil || assetErr != nil || groupId <= 0 || assetId <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid asset id"})
+		return
+	}
+	var request updateAssetLibraryAssetRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid request body"})
+		return
+	}
+	group, results, err := service.UpdateAssetLibraryAsset(c.Request.Context(), c.GetInt("id"), groupId, assetId, request.Name)
 	if err != nil {
 		assetLibraryErrorWithData(c, err, results)
 		return

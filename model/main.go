@@ -254,6 +254,14 @@ func migrateDB() error {
 	if err := migrateTokenModelLimitsToText(); err != nil {
 		return err
 	}
+	// Drop legacy asset-library mapping tables from a pre-release iteration. They
+	// held foreign key constraints named after the parent table + "Mappings"
+	// field (e.g. fk_asset_library_groups_mappings); MySQL requires constraint
+	// names to be schema-unique, so the renamed *_upstreams tables cannot be
+	// created while the old *_channels tables still exist.
+	if err := dropLegacyAssetLibraryTables(); err != nil {
+		return err
+	}
 
 	err := DB.AutoMigrate(
 		&Channel{},
@@ -289,8 +297,9 @@ func migrateDB() error {
 		&Invoice{},
 		&AssetLibraryGroup{},
 		&AssetLibraryAsset{},
-		&AssetLibraryGroupChannel{},
-		&AssetLibraryAssetChannel{},
+		&AssetLibraryGroupUpstream{},
+		&AssetLibraryAssetUpstream{},
+		&AssetLibraryUpstream{},
 	)
 	if err != nil {
 		return err
@@ -347,8 +356,9 @@ func migrateDBFast() error {
 		{&Invoice{}, "Invoice"},
 		{&AssetLibraryGroup{}, "AssetLibraryGroup"},
 		{&AssetLibraryAsset{}, "AssetLibraryAsset"},
-		{&AssetLibraryGroupChannel{}, "AssetLibraryGroupChannel"},
-		{&AssetLibraryAssetChannel{}, "AssetLibraryAssetChannel"},
+		{&AssetLibraryGroupUpstream{}, "AssetLibraryGroupUpstream"},
+		{&AssetLibraryAssetUpstream{}, "AssetLibraryAssetUpstream"},
+		{&AssetLibraryUpstream{}, "AssetLibraryUpstream"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
@@ -397,6 +407,24 @@ func migrateLOGDB() error {
 type sqliteColumnDef struct {
 	Name string
 	DDL  string
+}
+
+// dropLegacyAssetLibraryTables removes the pre-release *_channels mapping tables
+// so the renamed *_upstreams tables can be created. Dropping the child tables
+// also drops their foreign key constraints, freeing the schema-unique names.
+func dropLegacyAssetLibraryTables() error {
+	for _, tableName := range []string{
+		"asset_library_asset_channels",
+		"asset_library_group_channels",
+	} {
+		if DB.Migrator().HasTable(tableName) {
+			if err := DB.Migrator().DropTable(tableName); err != nil {
+				return err
+			}
+			common.SysLog("dropped legacy asset library table: " + tableName)
+		}
+	}
+	return nil
 }
 
 func ensureSubscriptionPlanTableSQLite() error {
