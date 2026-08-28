@@ -280,7 +280,7 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 		Content: []ContentItem{},
 	}
 
-	// Add images if present
+	// Add images if present (OpenAI 格式)
 	if req.HasImage() {
 		for _, imgURL := range req.Images {
 			r.Content = append(r.Content, ContentItem{
@@ -297,15 +297,94 @@ func (a *TaskAdaptor) convertToRequestPayload(req *relaycommon.TaskSubmitReq) (*
 		return nil, errors.Wrap(err, "unmarshal metadata failed")
 	}
 
-	if sec, _ := strconv.Atoi(req.Seconds); sec > 0 {
-		r.Duration = lo.ToPtr(dto.IntValue(sec))
+	// 顶层 content：火山原生格式客户端直接提交 content 数组
+	if len(r.Content) == 0 && len(req.Content) > 0 {
+		var items []ContentItem
+		if err := common.Unmarshal(req.Content, &items); err == nil {
+			r.Content = items
+		}
 	}
 
-	r.Content = lo.Reject(r.Content, func(c ContentItem, _ int) bool { return c.Type == "text" })
-	r.Content = append(r.Content, ContentItem{
-		Type: "text",
-		Text: req.Prompt,
-	})
+	// 顶层火山字段兜底：优先取 metadata 中的值，缺失时取顶层字段
+	if r.Resolution == "" {
+		r.Resolution = req.Resolution
+	}
+	if r.Ratio == "" {
+		r.Ratio = req.Ratio
+	}
+	if r.Duration == nil && req.Duration > 0 {
+		r.Duration = lo.ToPtr(dto.IntValue(req.Duration))
+	}
+	if r.Frames == nil && req.Frames > 0 {
+		r.Frames = lo.ToPtr(dto.IntValue(req.Frames))
+	}
+	if r.Seed == nil && req.Seed != nil {
+		r.Seed = lo.ToPtr(dto.IntValue(*req.Seed))
+	}
+	if r.GenerateAudio == nil && req.GenerateAudio != nil {
+		r.GenerateAudio = lo.ToPtr(dto.BoolValue(*req.GenerateAudio))
+	}
+	if r.Watermark == nil && req.Watermark != nil {
+		r.Watermark = lo.ToPtr(dto.BoolValue(*req.Watermark))
+	}
+	if r.CameraFixed == nil && req.CameraFixed != nil {
+		r.CameraFixed = lo.ToPtr(dto.BoolValue(*req.CameraFixed))
+	}
+	if r.ReturnLastFrame == nil && req.ReturnLastFrame != nil {
+		r.ReturnLastFrame = lo.ToPtr(dto.BoolValue(*req.ReturnLastFrame))
+	}
+	if r.CallbackURL == "" {
+		r.CallbackURL = req.CallbackURL
+	}
+	if r.ServiceTier == "" {
+		r.ServiceTier = req.ServiceTier
+	}
+	if r.Draft == nil && req.Draft != nil {
+		r.Draft = lo.ToPtr(dto.BoolValue(*req.Draft))
+	}
+	if r.ExecutionExpiresAfter == nil && req.ExecutionExpiresAfter != nil {
+		r.ExecutionExpiresAfter = lo.ToPtr(dto.IntValue(*req.ExecutionExpiresAfter))
+	}
+	if len(r.Tools) == 0 && len(req.Tools) > 0 {
+		var tools []struct {
+			Type string `json:"type,omitempty"`
+		}
+		if err := common.Unmarshal(req.Tools, &tools); err == nil {
+			r.Tools = tools
+		}
+	}
+
+	// OpenAI /v1/videos 格式（size / seconds）映射到火山字段
+	if r.Resolution == "" || r.Ratio == "" {
+		if resolution, ratio, ok := parseOpenAISize(req.Size); ok {
+			if r.Resolution == "" {
+				r.Resolution = resolution
+			}
+			if r.Ratio == "" {
+				r.Ratio = ratio
+			}
+		}
+	}
+	if r.Duration == nil {
+		if sec, _ := strconv.Atoi(req.Seconds); sec > 0 {
+			r.Duration = lo.ToPtr(dto.IntValue(sec))
+		}
+	}
+
+	// 兜底：如果 content 里没有文本项，把 prompt 塞进去
+	hasText := false
+	for _, item := range r.Content {
+		if item.Type == "text" {
+			hasText = true
+			break
+		}
+	}
+	if !hasText && req.Prompt != "" {
+		r.Content = append(r.Content, ContentItem{
+			Type: "text",
+			Text: req.Prompt,
+		})
+	}
 
 	return &r, nil
 }
@@ -405,4 +484,55 @@ func mapTaskStatusToVolc(s model.TaskStatus) string {
 	default:
 		return "queued"
 	}
+}
+
+func parseOpenAISize(size string) (resolution, ratio string, ok bool) {
+	s := strings.TrimSpace(strings.ToLower(size))
+	if s == "" {
+		return "", "", false
+	}
+	parts := strings.Split(s, "x")
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	w, err1 := strconv.Atoi(strings.TrimSpace(parts[0]))
+	h, err2 := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil || w <= 0 || h <= 0 {
+		return "", "", false
+	}
+
+	short := w
+	if h < short {
+		short = h
+	}
+	switch {
+	case short <= 480:
+		resolution = "480p"
+	case short <= 720:
+		resolution = "720p"
+	case short <= 1080:
+		resolution = "1080p"
+	default:
+		resolution = "4k"
+	}
+
+	g := gcd(w, h)
+	rw, rh := w/g, h/g
+	switch fmt.Sprintf("%d:%d", rw, rh) {
+	case "16:9", "9:16", "4:3", "3:4", "1:1", "21:9", "9:21":
+		ratio = fmt.Sprintf("%d:%d", rw, rh)
+	default:
+		ratio = "16:9"
+	}
+	return resolution, ratio, true
+}
+
+func gcd(a, b int) int {
+	for b != 0 {
+		a, b = b, a%b
+	}
+	if a < 0 {
+		return -a
+	}
+	return a
 }
