@@ -494,7 +494,7 @@ func RefreshAssetLibraryGroup(ctx context.Context, userId int, groupId int64) (*
 
 // DeleteAssetLibraryGroup deletes every asset from every upstream, then removes
 // the local records.
-func DeleteAssetLibraryGroup(ctx context.Context, userId int, groupId int64) ([]AssetLibraryOperationResult, error) {
+func DeleteAssetLibraryGroup(ctx context.Context, userId int, groupId int64, force bool) ([]AssetLibraryOperationResult, error) {
 	group, err := model.GetAssetLibraryGroup(userId, groupId)
 	if err != nil {
 		return nil, err
@@ -529,15 +529,16 @@ func DeleteAssetLibraryGroup(ctx context.Context, userId int, groupId int64) ([]
 		}
 		results = append(results, result)
 	}
-	if !allSucceeded {
+	if !allSucceeded && !force {
 		return results, errors.New("one or more upstreams failed to delete the asset group")
 	}
 	return results, model.DeleteAssetLibraryGroup(userId, groupId)
 }
 
 // DeleteAssetLibraryAsset deletes a single asset from every upstream, then
-// removes the local record.
-func DeleteAssetLibraryAsset(ctx context.Context, userId int, groupId int64, assetId int64) ([]AssetLibraryOperationResult, error) {
+// removes the local record. When force is true, upstream failures are ignored
+// and the local record is removed regardless.
+func DeleteAssetLibraryAsset(ctx context.Context, userId int, groupId int64, assetId int64, force bool) ([]AssetLibraryOperationResult, error) {
 	group, err := model.GetAssetLibraryGroup(userId, groupId)
 	if err != nil {
 		return nil, err
@@ -576,7 +577,7 @@ func DeleteAssetLibraryAsset(ctx context.Context, userId int, groupId int64, ass
 		}
 		results = append(results, result)
 	}
-	if !allSucceeded {
+	if !allSucceeded && !force {
 		return results, errors.New("one or more upstreams failed to delete the asset")
 	}
 	removeLocalAssetFile(asset.SourceURL)

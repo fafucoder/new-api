@@ -65,7 +65,7 @@ const { Title, Text } = Typography;
 
 const GROUP_TYPES = [
   { key: 'AIGC', labelKey: '虚拟素材', icon: LayoutGrid },
-  { key: 'LivenessFace', labelKey: '真人素材', icon: ScanFace },
+  { key: 'LivenessFace', labelKey: '真人素材', icon: ScanFace, disabled: true },
 ];
 
 const PAGE_SIZE = 12;
@@ -239,7 +239,7 @@ const AssetLibrary = () => {
   const [assetSort, setAssetSort] = useState('created_desc');
   const [page, setPage] = useState(1);
 
-  const [uploadTab, setUploadTab] = useState('local');
+  const [uploadTab, setUploadTab] = useState('url');
   const [urlValue, setUrlValue] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -373,7 +373,7 @@ const AssetLibrary = () => {
         description: createDescription.trim(),
       });
       if (hasFailedChannel(response)) {
-        showWarning(t('部分上游同步失败'));
+        showWarning(t('部分素材同步失败'));
       } else {
         showSuccess(t('素材组已创建'));
       }
@@ -402,7 +402,7 @@ const AssetLibrary = () => {
         },
       );
       if (hasFailedChannel(response)) {
-        showWarning(t('部分上游同步失败'));
+        showWarning(t('部分素材同步失败'));
       } else {
         showSuccess(t('素材组已更新'));
       }
@@ -426,7 +426,7 @@ const AssetLibrary = () => {
         { name: editingAssetName.trim() },
       );
       if (hasFailedChannel(response)) {
-        showWarning(t('部分上游同步失败'));
+        showWarning(t('部分素材同步失败'));
       } else {
         showSuccess(t('素材已更新'));
       }
@@ -440,6 +440,15 @@ const AssetLibrary = () => {
     }
   };
 
+  const deleteGroupRequest = async (group, force) => {
+    await API.delete(
+      `/api/asset-library/groups/${group.id}${force ? '?force=true' : ''}`,
+    );
+    showSuccess(t('素材组已删除'));
+    if (selectedGroupId === group.id) setSelectedGroupId(null);
+    await loadData(false);
+  };
+
   const confirmDeleteGroup = (group) => {
     if ((group.assets?.length || 0) > 0) {
       showWarning(t('素材组中还有素材，请先删除全部素材后再删除素材组'));
@@ -447,15 +456,24 @@ const AssetLibrary = () => {
     }
     Modal.confirm({
       title: t('确认删除'),
-      content: t('此操作会从每个已映射上游中删除该素材组'),
+      content: t('此操作将永久删除该素材组，删除后不可恢复'),
       onOk: async () => {
         try {
-          await API.delete(`/api/asset-library/groups/${group.id}`);
-          showSuccess(t('素材组已删除'));
-          if (selectedGroupId === group.id) setSelectedGroupId(null);
-          await loadData(false);
+          await deleteGroupRequest(group, false);
         } catch (error) {
-          showError(error);
+          Modal.confirm({
+            title: t('删除失败'),
+            content: t('删除时发生错误，是否强制删除？强制删除会忽略错误并直接移除该素材组。'),
+            okType: 'danger',
+            okText: t('强制删除'),
+            onOk: async () => {
+              try {
+                await deleteGroupRequest(group, true);
+              } catch (forceError) {
+                showError(forceError);
+              }
+            },
+          });
         }
       },
     });
@@ -473,7 +491,7 @@ const AssetLibrary = () => {
         form,
       );
       if (hasFailedChannel(response)) {
-        showWarning(t('部分上游同步失败'));
+        showWarning(t('部分素材同步失败'));
       } else {
         showSuccess(t('素材已上传'));
       }
@@ -500,7 +518,7 @@ const AssetLibrary = () => {
         { assets: urls.map((url) => ({ url })) },
       );
       if (hasFailedChannel(response)) {
-        showWarning(t('部分上游同步失败'));
+        showWarning(t('部分素材同步失败'));
       } else {
         showSuccess(t('素材已上传'));
       }
@@ -520,7 +538,7 @@ const AssetLibrary = () => {
         `/api/asset-library/groups/${selectedGroup.id}/refresh`,
       );
       if (hasFailedChannel(response)) {
-        showWarning(t('部分上游同步失败'));
+        showWarning(t('部分素材同步失败'));
       } else {
         showSuccess(t('素材状态已刷新'));
       }
@@ -530,20 +548,40 @@ const AssetLibrary = () => {
     }
   };
 
+  const deleteAssetRequest = async (asset, force) => {
+    await API.delete(
+      `/api/asset-library/groups/${selectedGroup.id}/assets/${asset.id}${
+        force ? '?force=true' : ''
+      }`,
+    );
+    showSuccess(t('素材已删除'));
+    if (detailAssetId === asset.id) setDetailAssetId(null);
+    await loadData(true);
+  };
+
   const confirmDeleteAsset = (asset) => {
     Modal.confirm({
       title: t('确认删除'),
-      content: t('此操作会从每个已映射上游中删除该素材'),
+      content: t('此操作将永久删除该素材，删除后不可恢复'),
       onOk: async () => {
         try {
-          await API.delete(
-            `/api/asset-library/groups/${selectedGroup.id}/assets/${asset.id}`,
-          );
-          showSuccess(t('素材已删除'));
-          if (detailAssetId === asset.id) setDetailAssetId(null);
-          await loadData(true);
+          await deleteAssetRequest(asset, false);
         } catch (error) {
-          showError(error);
+          // Upstream failure (e.g. 502): offer a force delete that removes the
+          // local record regardless of upstream errors.
+          Modal.confirm({
+            title: t('删除失败'),
+            content: t('删除时发生错误，是否强制删除？强制删除会忽略错误并直接移除该素材。'),
+            okType: 'danger',
+            okText: t('强制删除'),
+            onOk: async () => {
+              try {
+                await deleteAssetRequest(asset, true);
+              } catch (forceError) {
+                showError(forceError);
+              }
+            },
+          });
         }
       },
     });
@@ -569,7 +607,21 @@ const AssetLibrary = () => {
   };
 
   const editUpstream = (upstream) => {
-    setUpstreamForm({ ...emptyUpstreamForm(), ...upstream, api_key: '' });
+    // Merge over defaults, but let empty values (e.g. action fields added after
+    // this upstream was created) fall back to their defaults instead of showing
+    // blank inputs.
+    const defaults = emptyUpstreamForm();
+    const merged = { ...defaults };
+    Object.keys(upstream || {}).forEach((key) => {
+      const value = upstream[key];
+      if (value !== null && value !== undefined && value !== '') {
+        merged[key] = value;
+      }
+    });
+    merged.id = upstream.id;
+    merged.enabled = upstream.enabled;
+    merged.api_key = '';
+    setUpstreamForm(merged);
     setUpstreamEditing(true);
   };
 
@@ -699,6 +751,11 @@ const AssetLibrary = () => {
               size='small'
               activeKey={activeType}
               onChange={(key) => {
+                const target = GROUP_TYPES.find((tp) => tp.key === key);
+                if (target?.disabled) {
+                  showWarning(t('开发中'));
+                  return;
+                }
                 setActiveType(key);
                 const first = groups.find(
                   (g) => (g.group_type || 'AIGC') === key,
@@ -712,11 +769,21 @@ const AssetLibrary = () => {
                   <TabPane
                     key={type.key}
                     itemKey={type.key}
+                    disabled={type.disabled}
                     tab={
-                      <span className='flex items-center gap-1.5'>
-                        <Icon size={15} />
-                        {t(type.labelKey)}
-                      </span>
+                      type.disabled ? (
+                        <Tooltip content={t('开发中')}>
+                          <span className='flex items-center gap-1.5'>
+                            <Icon size={15} />
+                            {t(type.labelKey)}
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <span className='flex items-center gap-1.5'>
+                          <Icon size={15} />
+                          {t(type.labelKey)}
+                        </span>
+                      )
                     }
                   />
                 );
@@ -818,7 +885,7 @@ const AssetLibrary = () => {
                   upstreams.length === 0
                     ? admin
                       ? t('尚未配置上游，请点击右上角「上游配置」')
-                      : t('尚未配置素材上游')
+                      : t('素材功能尚未就绪，请联系管理员')
                     : t('请选择或新建一个素材组')
                 }
               />
@@ -913,22 +980,30 @@ const AssetLibrary = () => {
                 {/* Upload source tabs */}
                 <div className='mb-3 flex gap-2'>
                   {[
-                    { key: 'local', icon: Upload, label: '本地文件' },
+                    { key: 'local', icon: Upload, label: '本地文件', disabled: true },
                     { key: 'url', icon: LinkIcon, label: 'Public URL' },
                   ].map((tab) => {
                     const active = uploadTab === tab.key;
                     const TabIcon = tab.icon;
-                    return (
+                    const btn = (
                       <button
                         key={tab.key}
                         type='button'
-                        onClick={() => setUploadTab(tab.key)}
+                        disabled={tab.disabled}
+                        onClick={() => {
+                          if (tab.disabled) {
+                            showWarning(t('开发中'));
+                            return;
+                          }
+                          setUploadTab(tab.key);
+                        }}
                         className='flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm'
                         style={{
                           border: 'none',
-                          cursor: 'pointer',
+                          cursor: tab.disabled ? 'not-allowed' : 'pointer',
                           fontWeight: active ? 600 : 400,
                           background: active ? activeBg : 'transparent',
+                          opacity: tab.disabled ? 0.5 : 1,
                           color: active
                             ? 'var(--semi-color-primary)'
                             : 'var(--semi-color-text-1)',
@@ -937,6 +1012,13 @@ const AssetLibrary = () => {
                         <TabIcon size={14} />
                         {t(tab.label)}
                       </button>
+                    );
+                    return tab.disabled ? (
+                      <Tooltip key={tab.key} content={t('开发中')}>
+                        {btn}
+                      </Tooltip>
+                    ) : (
+                      btn
                     );
                   })}
                 </div>
@@ -1348,21 +1430,21 @@ const AssetLibrary = () => {
               );
             })()}
 
-            {/* Upstream mappings */}
+            {/* Sync status */}
             {detailAsset.mappings?.length > 0 && (
               <div>
                 <Text type='tertiary' size='small'>
-                  {t('上游状态')}
+                  {t('同步状态')}
                 </Text>
                 <div className='mt-1 space-y-1'>
-                  {detailAsset.mappings.map((mapping) => (
+                  {detailAsset.mappings.map((mapping, index) => (
                     <div
                       key={mapping.id}
                       className='flex items-center justify-between rounded px-2 py-1.5'
                       style={{ border: `1px solid ${borderColor}` }}
                     >
                       <span className='truncate text-xs'>
-                        {mapping.upstream_name || `#${mapping.upstream_id}`}
+                        {t('线路 {{index}}', { index: index + 1 })}
                       </span>
                       <Tag size='small' color={statusColor(mapping.status)}>
                         {statusLabel(t, mapping.status)}

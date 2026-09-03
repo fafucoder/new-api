@@ -452,6 +452,7 @@ const VideoTutorial = () => {
   const protocols = [
     { key: 'volcengine', label: t('火山兼容 API') },
     { key: 'openai', label: t('OpenAI 兼容 API') },
+    { key: 'assets', label: t('素材管理 API') },
   ];
 
   const handlePanelToggle = (index) => {
@@ -1051,6 +1052,187 @@ camera_fixed`}</CodeBlock>
     },
   ];
 
+  // ==================== 素材管理 API ====================
+  const assetSteps = [
+    {
+      title: t('快速接入'),
+      subtitle: t('鉴权、建组、上传素材、轮询状态'),
+      content: (
+        <div className="space-y-3">
+          <SectionLabel>{t('1. 准备凭证')}</SectionLabel>
+          <p>
+            {t('素材管理接口属于控制台接口，使用「个人设置」中生成的系统访问令牌鉴权。需同时携带两个请求头：Authorization 为访问令牌（无 Bearer 前缀），New-Api-User 为你的用户 ID：')}
+          </p>
+          <CodeBlock>{`Authorization: <ACCESS_TOKEN>
+New-Api-User: <USER_ID>`}</CodeBlock>
+          <p className="text-sm">
+            {t('接口前缀统一为 /api/asset-library，请求与响应均为 application/json，字段使用小写下划线命名。')}
+          </p>
+
+          <SectionLabel>{t('2. 创建素材组')}</SectionLabel>
+          <CodeBlock>{`curl -X POST "${BASE_URL}/api/asset-library/groups" \\
+  -H "Authorization: <ACCESS_TOKEN>" \\
+  -H "New-Api-User: <USER_ID>" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "display_name": "my-group", "group_type": "AIGC", "description": "" }'`}</CodeBlock>
+          <p>{t('从响应 data.group.id 取得素材组 ID。')}</p>
+
+          <SectionLabel>{t('3. 上传素材（公网 URL）')}</SectionLabel>
+          <CodeBlock>{`curl -X POST "${BASE_URL}/api/asset-library/groups/<GROUP_ID>/assets" \\
+  -H "Authorization: <ACCESS_TOKEN>" \\
+  -H "New-Api-User: <USER_ID>" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "assets": [ { "url": "https://example.com/logo.png" } ] }'`}</CodeBlock>
+          <p className="text-sm">
+            {t('素材为异步入库，创建后需轮询状态。')}
+          </p>
+
+          <SectionLabel>{t('4. 轮询素材状态')}</SectionLabel>
+          <CodeBlock>{`curl -X POST "${BASE_URL}/api/asset-library/groups/<GROUP_ID>/refresh" \\
+  -H "Authorization: <ACCESS_TOKEN>" \\
+  -H "New-Api-User: <USER_ID>"`}</CodeBlock>
+          <p>
+            {t('刷新会拉取各上游最新状态并回写；随后用「查询素材组详情」查看每个素材 mappings 中的 status 与 asset_url。')}
+          </p>
+
+          <Callout type="info" title={t('复用到视频生成')}>
+            {t('素材状态变为 Active 后，可在「创建视频生成任务」的 content 中用 asset://<ASSET_ID> 引用；此处的 ASSET_ID 为素材上游返回的 upstream_asset_id。')}
+          </Callout>
+        </div>
+      ),
+    },
+    {
+      title: t('查询素材组列表'),
+      subtitle: 'GET /api/asset-library/groups',
+      content: (
+        <div className="space-y-2">
+          <EndpointHeader method="GET" path="/api/asset-library/groups" />
+          <p>{t('返回当前用户的全部素材组，每个组内联其素材与上游映射。')}</p>
+          <SectionLabel>{t('响应内容')}</SectionLabel>
+          <SimpleTable
+            firstColMono
+            headers={[t('字段'), t('类型'), t('说明')]}
+            rows={[
+              ['data', 'object[]', t('素材组数组。')],
+              ['data[].id', 'integer', t('素材组 ID。')],
+              ['data[].display_name', 'string', t('素材组名称。')],
+              ['data[].description', 'string', t('素材组描述。')],
+              ['data[].group_type', 'string', 'AIGC 或 LivenessFace。'],
+              ['data[].assets', 'object[]', t('组内素材列表。')],
+              ['data[].mappings', 'object[]', t('组在各上游的映射与状态。')],
+            ]}
+          />
+          <p className="text-sm">
+            {t('查询单个素材组详情：GET /api/asset-library/groups/{id}。')}
+          </p>
+        </div>
+      ),
+    },
+    {
+      title: t('创建素材组'),
+      subtitle: 'POST /api/asset-library/groups',
+      content: (
+        <div className="space-y-2">
+          <EndpointHeader method="POST" path="/api/asset-library/groups" />
+          <p>{t('创建一个空素材组，随后再向组内追加素材。')}</p>
+          <SectionLabel>{t('请求参数')}</SectionLabel>
+          <SimpleTable
+            firstColMono
+            headers={[t('字段'), t('类型'), t('必选'), t('说明')]}
+            rows={[
+              ['display_name', 'string', t('是'), t('素材组名称，最长 64 个字符。')],
+              ['group_type', 'string', t('否'), t('默认 AIGC；可选 AIGC 或 LivenessFace。')],
+              ['description', 'string', t('否'), t('素材组描述，最长 300 个字符。')],
+            ]}
+          />
+          <SectionLabel>{t('请求示例')}</SectionLabel>
+          <CodeBlock>{`curl -X POST "${BASE_URL}/api/asset-library/groups" \\
+  -H "Authorization: <ACCESS_TOKEN>" \\
+  -H "New-Api-User: <USER_ID>" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "display_name": "product-shots", "group_type": "AIGC" }'`}</CodeBlock>
+          <SectionLabel>{t('响应内容')}</SectionLabel>
+          <p className="text-sm">
+            {t('data.group 为新建素材组，data.results 为各上游建组结果（success 与 message）。')}
+          </p>
+        </div>
+      ),
+    },
+    {
+      title: t('上传素材'),
+      subtitle: 'POST /api/asset-library/groups/{id}/assets',
+      content: (
+        <div className="space-y-2">
+          <EndpointHeader method="POST" path="/api/asset-library/groups/{id}/assets" />
+          <p>
+            {t('向素材组追加素材，通过 JSON 传入公网可访问的素材 URL。素材异步入库。')}
+          </p>
+          <SimpleTable
+            firstColMono
+            headers={[t('字段'), t('类型'), t('必选'), t('说明')]}
+            rows={[
+              ['assets', 'object[]', t('是'), t('素材数组，最多 20 个。')],
+              ['assets[].url', 'string', t('是'), t('公网可访问的素材 URL。')],
+              ['assets[].name', 'string', t('否'), t('素材名称；缺省时从 URL 推断。')],
+              ['assets[].asset_type', 'string', t('否'), t('Image、Video 或 Audio；缺省时按扩展名推断。')],
+            ]}
+          />
+          <CodeBlock>{`curl -X POST "${BASE_URL}/api/asset-library/groups/<GROUP_ID>/assets" \\
+  -H "Authorization: <ACCESS_TOKEN>" \\
+  -H "New-Api-User: <USER_ID>" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "assets": [ { "url": "https://example.com/a.png", "asset_type": "Image" } ] }'`}</CodeBlock>
+          <SectionLabel>{t('响应内容')}</SectionLabel>
+          <p className="text-sm">
+            {t('data.group 为更新后的素材组，data.results 为各上游上传结果；单个素材在 assets[].mappings 中记录 status（Processing/Active/Failed）与 upstream_asset_id。')}
+          </p>
+        </div>
+      ),
+    },
+    {
+      title: t('刷新与重命名'),
+      subtitle: 'POST /refresh · PATCH /groups/{id} · PATCH /assets/{assetId}',
+      content: (
+        <div className="space-y-2">
+          <EndpointHeader method="POST" path="/api/asset-library/groups/{id}/refresh" />
+          <p className="text-sm">
+            {t('拉取各上游最新素材状态并回写本地，用于轮询异步入库结果。')}
+          </p>
+          <SectionLabel>{t('重命名素材组')}</SectionLabel>
+          <EndpointHeader method="PATCH" path="/api/asset-library/groups/{id}" />
+          <p className="text-sm">
+            {t('请求体：{ "display_name": "...", "description": "..." }，会同步到各上游。')}
+          </p>
+          <SectionLabel>{t('重命名素材')}</SectionLabel>
+          <EndpointHeader method="PATCH" path="/api/asset-library/groups/{id}/assets/{assetId}" />
+          <p className="text-sm">
+            {t('请求体：{ "name": "..." }，会同步到各上游（OpenAI Files 上游不支持改名，将跳过）。')}
+          </p>
+        </div>
+      ),
+    },
+    {
+      title: t('删除素材与素材组'),
+      subtitle: 'DELETE /assets/{assetId} · DELETE /groups/{id}',
+      content: (
+        <div className="space-y-2">
+          <EndpointHeader method="DELETE" path="/api/asset-library/groups/{id}/assets/{assetId}" />
+          <p className="text-sm">
+            {t('从每个已映射上游删除该素材后再删除本地记录。')}
+          </p>
+          <SectionLabel>{t('删除素材组')}</SectionLabel>
+          <EndpointHeader method="DELETE" path="/api/asset-library/groups/{id}" />
+          <p className="text-sm">
+            {t('素材组必须为空才能删除；组内仍有素材时返回错误，请先删除全部素材。')}
+          </p>
+          <Callout type="warn" title={t('删除不可恢复')}>
+            {t('删除后无法再查询，也不能继续用于视频生成。需要保留时请先转存素材 URL。')}
+          </Callout>
+        </div>
+      ),
+    },
+  ];
+
   const tutorialData = {
     volcengine: {
       description: t(
@@ -1063,6 +1245,12 @@ camera_fixed`}</CodeBlock>
         'OpenAI 兼容 API 适合从 OpenAI Videos / Sora 客户端迁移，仅接受 application/json，通过顶层字段白名单传参，覆盖视频任务的创建、查询、内容下载与错误处理。',
       ),
       steps: openaiSteps,
+    },
+    assets: {
+      description: t(
+        '素材管理 API 为控制台接口（前缀 /api/asset-library，使用系统访问令牌鉴权），用于创建素材组、上传并轮询素材，随后在视频生成中以 asset://<ASSET_ID> 复用。',
+      ),
+      steps: assetSteps,
     },
   };
 
@@ -1140,8 +1328,21 @@ camera_fixed`}</CodeBlock>
 
         {/* 当前协议说明 */}
         <div className="mb-6 flex items-start gap-2">
-          <Tag color={activeProtocol === 'volcengine' ? 'orange' : 'blue'} size="small">
-            {activeProtocol === 'volcengine' ? t('Seedance 参数') : t('OpenAI 风格')}
+          <Tag
+            color={
+              activeProtocol === 'volcengine'
+                ? 'orange'
+                : activeProtocol === 'assets'
+                  ? 'green'
+                  : 'blue'
+            }
+            size="small"
+          >
+            {activeProtocol === 'volcengine'
+              ? t('Seedance 参数')
+              : activeProtocol === 'assets'
+                ? t('素材管理')
+                : t('OpenAI 风格')}
           </Tag>
           <p className="text-sm flex-1" style={{ color: getSecondaryTextColor() }}>
             {current.description}

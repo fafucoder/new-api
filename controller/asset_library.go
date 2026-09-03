@@ -243,7 +243,7 @@ func DeleteAssetLibraryGroup(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid asset group id"})
 		return
 	}
-	results, err := service.DeleteAssetLibraryGroup(c.Request.Context(), c.GetInt("id"), groupId)
+	results, err := service.DeleteAssetLibraryGroup(c.Request.Context(), c.GetInt("id"), groupId, assetLibraryForce(c))
 	if err != nil {
 		assetLibraryErrorWithData(c, err, results)
 		return
@@ -261,7 +261,7 @@ func DeleteAssetLibraryAsset(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid asset id"})
 		return
 	}
-	results, err := service.DeleteAssetLibraryAsset(c.Request.Context(), c.GetInt("id"), groupId, assetId)
+	results, err := service.DeleteAssetLibraryAsset(c.Request.Context(), c.GetInt("id"), groupId, assetId, assetLibraryForce(c))
 	if err != nil {
 		assetLibraryErrorWithData(c, err, results)
 		return
@@ -309,6 +309,13 @@ func assetLibraryFiles(c *gin.Context) ([]*multipart.FileHeader, func(), bool) {
 
 func assetLibraryError(c *gin.Context, err error) {
 	assetLibraryErrorWithData(c, err, nil)
+}
+
+// assetLibraryForce reports whether the caller requested a force delete, which
+// removes the local record even if some upstreams fail to delete.
+func assetLibraryForce(c *gin.Context) bool {
+	value := strings.ToLower(strings.TrimSpace(c.Query("force")))
+	return value == "1" || value == "true"
 }
 
 func assetLibraryErrorWithData(c *gin.Context, err error, data interface{}) {
