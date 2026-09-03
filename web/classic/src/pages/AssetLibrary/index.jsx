@@ -29,8 +29,6 @@ import {
   SideSheet,
   Space,
   Spin,
-  Tabs,
-  TabPane,
   Tag,
   TextArea,
   Tooltip,
@@ -46,13 +44,11 @@ import {
   Folder,
   FolderPlus,
   Image as ImageIcon,
-  LayoutGrid,
   Link as LinkIcon,
   MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
-  ScanFace,
   Search,
   Settings,
   Trash2,
@@ -62,11 +58,6 @@ import { useTranslation } from 'react-i18next';
 import { API, copy, isAdmin, showError, showSuccess, showWarning } from '../../helpers';
 
 const { Title, Text } = Typography;
-
-const GROUP_TYPES = [
-  { key: 'AIGC', labelKey: '虚拟素材', icon: LayoutGrid },
-  { key: 'LivenessFace', labelKey: '真人素材', icon: ScanFace, disabled: true },
-];
 
 const PAGE_SIZE = 12;
 
@@ -127,18 +118,13 @@ const formatTime = (seconds) => {
 };
 
 const assetPrimaryURL = (asset) =>
-  asset?.mappings?.find((mapping) => mapping.asset_url)?.asset_url ||
+  asset?.asset_url ||
   asset?.source_url ||
   '';
 
-// Aggregate a single display status across an asset's upstream mappings.
+// Use the pre-aggregated status from the API response.
 const assetDisplayStatus = (asset) => {
-  const mappings = asset?.mappings || [];
-  if (mappings.length === 0) return 'Processing';
-  if (mappings.some((m) => m.status === 'Failed')) return 'Failed';
-  if (mappings.some((m) => m.status === 'Processing')) return 'Processing';
-  if (mappings.every((m) => m.status === 'Active')) return 'Active';
-  return 'Processing';
+  return asset?.status || 'Processing';
 };
 
 const AssetThumb = ({ asset, size = 'card' }) => {
@@ -229,7 +215,6 @@ const AssetLibrary = () => {
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [upstreams, setUpstreams] = useState([]);
-  const [activeType, setActiveType] = useState('AIGC');
   const [groupSearch, setGroupSearch] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState(null);
 
@@ -274,10 +259,7 @@ const AssetLibrary = () => {
       setGroups(nextGroups);
       setUpstreams(channelsResponse.data.data || []);
       if (!keepSelection || !nextGroups.some((g) => g.id === selectedGroupId)) {
-        const firstOfType = nextGroups.find(
-          (g) => (g.group_type || 'AIGC') === activeType,
-        );
-        setSelectedGroupId(firstOfType ? firstOfType.id : null);
+        setSelectedGroupId(nextGroups.length > 0 ? nextGroups[0].id : null);
       }
     } catch (error) {
       showError(error);
@@ -293,14 +275,12 @@ const AssetLibrary = () => {
 
   const visibleGroups = useMemo(() => {
     const keyword = groupSearch.trim().toLowerCase();
-    return groups
-      .filter((group) => (group.group_type || 'AIGC') === activeType)
-      .filter(
-        (group) =>
-          !keyword ||
-          (group.display_name || '').toLowerCase().includes(keyword),
-      );
-  }, [groups, activeType, groupSearch]);
+    return groups.filter(
+      (group) =>
+        !keyword ||
+        (group.display_name || '').toLowerCase().includes(keyword),
+    );
+  }, [groups, groupSearch]);
 
   const selectedGroup = useMemo(
     () => groups.find((group) => group.id === selectedGroupId) || null,
@@ -369,7 +349,7 @@ const AssetLibrary = () => {
     try {
       const response = await API.post('/api/asset-library/groups', {
         display_name: name,
-        group_type: activeType,
+        group_type: 'AIGC',
         description: createDescription.trim(),
       });
       if (hasFailedChannel(response)) {
@@ -743,52 +723,6 @@ const AssetLibrary = () => {
             >
               {t('新建组')}
             </Button>
-          </div>
-
-          <div className='px-2 pt-1'>
-            <Tabs
-              type='line'
-              size='small'
-              activeKey={activeType}
-              onChange={(key) => {
-                const target = GROUP_TYPES.find((tp) => tp.key === key);
-                if (target?.disabled) {
-                  showWarning(t('开发中'));
-                  return;
-                }
-                setActiveType(key);
-                const first = groups.find(
-                  (g) => (g.group_type || 'AIGC') === key,
-                );
-                setSelectedGroupId(first ? first.id : null);
-              }}
-            >
-              {GROUP_TYPES.map((type) => {
-                const Icon = type.icon;
-                return (
-                  <TabPane
-                    key={type.key}
-                    itemKey={type.key}
-                    disabled={type.disabled}
-                    tab={
-                      type.disabled ? (
-                        <Tooltip content={t('开发中')}>
-                          <span className='flex items-center gap-1.5'>
-                            <Icon size={15} />
-                            {t(type.labelKey)}
-                          </span>
-                        </Tooltip>
-                      ) : (
-                        <span className='flex items-center gap-1.5'>
-                          <Icon size={15} />
-                          {t(type.labelKey)}
-                        </span>
-                      )
-                    }
-                  />
-                );
-              })}
-            </Tabs>
           </div>
 
           <div className='px-3 py-2'>
@@ -1392,9 +1326,7 @@ const AssetLibrary = () => {
             </div>
 
             {(() => {
-              const assetId =
-                detailAsset.mappings?.find((m) => m.upstream_asset_id)
-                  ?.upstream_asset_id || '';
+              const assetId = detailAsset.asset_id || '';
               return (
                 <div>
                   <Text type='tertiary' size='small'>
@@ -1430,30 +1362,6 @@ const AssetLibrary = () => {
               );
             })()}
 
-            {/* Sync status */}
-            {detailAsset.mappings?.length > 0 && (
-              <div>
-                <Text type='tertiary' size='small'>
-                  {t('同步状态')}
-                </Text>
-                <div className='mt-1 space-y-1'>
-                  {detailAsset.mappings.map((mapping, index) => (
-                    <div
-                      key={mapping.id}
-                      className='flex items-center justify-between rounded px-2 py-1.5'
-                      style={{ border: `1px solid ${borderColor}` }}
-                    >
-                      <span className='truncate text-xs'>
-                        {t('线路 {{index}}', { index: index + 1 })}
-                      </span>
-                      <Tag size='small' color={statusColor(mapping.status)}>
-                        {statusLabel(t, mapping.status)}
-                      </Tag>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         )}
       </SideSheet>
@@ -1468,10 +1376,6 @@ const AssetLibrary = () => {
         okButtonProps={{ disabled: !createName.trim() }}
       >
         <div className='space-y-2'>
-          <Text type='tertiary' size='small'>
-            {t('类型')}：
-            {t(GROUP_TYPES.find((tp) => tp.key === activeType)?.labelKey)}
-          </Text>
           <Input
             value={createName}
             maxLength={64}

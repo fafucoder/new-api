@@ -1092,11 +1092,11 @@ New-Api-User: <USER_ID>`}</CodeBlock>
   -H "Authorization: <ACCESS_TOKEN>" \\
   -H "New-Api-User: <USER_ID>"`}</CodeBlock>
           <p>
-            {t('刷新会拉取各上游最新状态并回写；随后用「查询素材组详情」查看每个素材 mappings 中的 status 与 asset_url。')}
+            {t('刷新会拉取最新状态并回写；随后用「查询素材组详情」查看每个素材的 status 与 asset_url。')}
           </p>
 
           <Callout type="info" title={t('复用到视频生成')}>
-            {t('素材状态变为 Active 后，可在「创建视频生成任务」的 content 中用 asset://<ASSET_ID> 引用；此处的 ASSET_ID 为素材上游返回的 upstream_asset_id。')}
+            {t('素材状态变为 Active 后，可在「创建视频生成任务」的 content 中用 asset://<ASSET_ID> 引用；此处的 ASSET_ID 为素材详情中返回的 asset_id。')}
           </Callout>
         </div>
       ),
@@ -1107,7 +1107,7 @@ New-Api-User: <USER_ID>`}</CodeBlock>
       content: (
         <div className="space-y-2">
           <EndpointHeader method="GET" path="/api/asset-library/groups" />
-          <p>{t('返回当前用户的全部素材组，每个组内联其素材与上游映射。')}</p>
+          <p>{t('返回当前用户的全部素材组及组内素材。')}</p>
           <SectionLabel>{t('响应内容')}</SectionLabel>
           <SimpleTable
             firstColMono
@@ -1117,9 +1117,14 @@ New-Api-User: <USER_ID>`}</CodeBlock>
               ['data[].id', 'integer', t('素材组 ID。')],
               ['data[].display_name', 'string', t('素材组名称。')],
               ['data[].description', 'string', t('素材组描述。')],
-              ['data[].group_type', 'string', 'AIGC 或 LivenessFace。'],
+              ['data[].group_type', 'string', t('素材组类型，当前固定为 AIGC。')],
+              ['data[].status', 'string', t('素材组聚合状态：Active、Processing 或 Failed。')],
               ['data[].assets', 'object[]', t('组内素材列表。')],
-              ['data[].mappings', 'object[]', t('组在各上游的映射与状态。')],
+              ['data[].assets[].id', 'integer', t('素材 ID。')],
+              ['data[].assets[].name', 'string', t('素材名称。')],
+              ['data[].assets[].status', 'string', t('素材聚合状态：Active、Processing 或 Failed。')],
+              ['data[].assets[].asset_url', 'string', t('素材访问地址（有效期 12 小时）。')],
+              ['data[].assets[].asset_id', 'string', t('素材资产 ID，可用于 asset:// 引用。')],
             ]}
           />
           <p className="text-sm">
@@ -1141,7 +1146,7 @@ New-Api-User: <USER_ID>`}</CodeBlock>
             headers={[t('字段'), t('类型'), t('必选'), t('说明')]}
             rows={[
               ['display_name', 'string', t('是'), t('素材组名称，最长 64 个字符。')],
-              ['group_type', 'string', t('否'), t('默认 AIGC；可选 AIGC 或 LivenessFace。')],
+              ['group_type', 'string', t('否'), t('默认 AIGC，当前仅支持 AIGC。')],
               ['description', 'string', t('否'), t('素材组描述，最长 300 个字符。')],
             ]}
           />
@@ -1184,7 +1189,7 @@ New-Api-User: <USER_ID>`}</CodeBlock>
   -d '{ "assets": [ { "url": "https://example.com/a.png", "asset_type": "Image" } ] }'`}</CodeBlock>
           <SectionLabel>{t('响应内容')}</SectionLabel>
           <p className="text-sm">
-            {t('data.group 为更新后的素材组，data.results 为各上游上传结果；单个素材在 assets[].mappings 中记录 status（Processing/Active/Failed）与 upstream_asset_id。')}
+            {t('data.group 为更新后的素材组，data.results 为各线路上传结果；素材的 status 表示处理状态（Processing/Active/Failed），asset_id 为可用于 asset:// 引用的资产 ID。')}
           </p>
         </div>
       ),

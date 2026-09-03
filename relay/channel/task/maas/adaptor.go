@@ -104,7 +104,8 @@ type responseTask struct {
 	ID      string `json:"id"`
 	Status  string `json:"status"`
 	Content struct {
-		VideoURL string `json:"video_url"`
+		VideoURL     string `json:"video_url"`
+		LastFrameURL string `json:"last_frame_url,omitempty"`
 	} `json:"content"`
 	// 上游若回显 usage（当前实测不返回，预留兼容）
 	Usage struct {
@@ -414,6 +415,9 @@ func (a *TaskAdaptor) ConvertToOpenAIVideo(originTask *model.Task) ([]byte, erro
 	ov.Status = originTask.Status.ToVideoStatus()
 	ov.SetProgressStr(originTask.Progress)
 	ov.SetMetadata("url", dResp.Content.VideoURL)
+	if dResp.Content.LastFrameURL != "" {
+		ov.SetMetadata("last_frame_url", dResp.Content.LastFrameURL)
+	}
 	ov.CreatedAt = originTask.CreatedAt
 	ov.CompletedAt = originTask.UpdatedAt
 	ov.Model = originTask.Properties.OriginModelName

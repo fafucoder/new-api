@@ -56,12 +56,41 @@ type AssetLibraryUpstreamBrief struct {
 }
 
 // AssetLibraryOperationResult reports the outcome of one upstream during a
-// multi-upstream fan-out.
+// multi-upstream fan-out. Internal upstream details are omitted to avoid
+// leaking infrastructure information to end users.
 type AssetLibraryOperationResult struct {
-	UpstreamId   int64  `json:"upstream_id"`
-	UpstreamName string `json:"upstream_name"`
-	Success      bool   `json:"success"`
-	Message      string `json:"message,omitempty"`
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+}
+
+// AssetLibraryGroupResponse is the public-facing representation of a group,
+// free of upstream identifiers and mapping details.
+type AssetLibraryGroupResponse struct {
+	Id          int64                        `json:"id"`
+	DisplayName string                       `json:"display_name"`
+	Description string                       `json:"description"`
+	GroupType   string                       `json:"group_type"`
+	CoverURL    string                       `json:"cover_url"`
+	CreatedTime int64                        `json:"created_time"`
+	UpdatedTime int64                        `json:"updated_time"`
+	Status      string                       `json:"status"`
+	Assets      []AssetLibraryAssetResponse  `json:"assets"`
+}
+
+// AssetLibraryAssetResponse is the public-facing representation of an asset.
+type AssetLibraryAssetResponse struct {
+	Id          int64  `json:"id"`
+	GroupId     int64  `json:"group_id"`
+	Name        string `json:"name"`
+	AssetType   string `json:"asset_type"`
+	SourceURL   string `json:"source_url"`
+	FileSize    int64  `json:"file_size"`
+	MimeType    string `json:"mime_type"`
+	CreatedTime int64  `json:"created_time"`
+	UpdatedTime int64  `json:"updated_time"`
+	Status      string `json:"status"`
+	AssetURL    string `json:"asset_url"`
+	AssetId     string `json:"asset_id"`
 }
 
 // ---- volcengine response envelope ----
@@ -149,28 +178,31 @@ func ListAssetLibraryUpstreamsForUser() ([]AssetLibraryUpstreamBrief, error) {
 	return briefs, nil
 }
 
-func ListAssetLibraryGroups(userId int) ([]model.AssetLibraryGroup, error) {
+func ListAssetLibraryGroups(userId int) ([]AssetLibraryGroupResponse, error) {
 	groups, err := model.ListAssetLibraryGroups(userId)
 	if err != nil {
 		return nil, err
 	}
-	decorateAssetLibraryGroups(groups)
-	return groups, nil
+	resp := make([]AssetLibraryGroupResponse, 0, len(groups))
+	for i := range groups {
+		resp = append(resp, toGroupResponse(&groups[i]))
+	}
+	return resp, nil
 }
 
-func GetAssetLibraryGroup(userId int, groupId int64) (*model.AssetLibraryGroup, error) {
+func GetAssetLibraryGroup(userId int, groupId int64) (*AssetLibraryGroupResponse, error) {
 	group, err := model.GetAssetLibraryGroup(userId, groupId)
 	if err != nil {
 		return nil, err
 	}
-	decorateAssetLibraryGroup(group)
-	return group, nil
+	resp := toGroupResponse(group)
+	return &resp, nil
 }
 
 // CreateAssetLibraryGroup creates an empty asset group locally and, for every
 // volcengine upstream, an upstream asset group. OpenAI upstreams have no group
 // concept, so only a local mapping placeholder is recorded.
-func CreateAssetLibraryGroup(ctx context.Context, userId int, displayName string, groupType string, description string) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+func CreateAssetLibraryGroup(ctx context.Context, userId int, displayName string, groupType string, description string) (*AssetLibraryGroupResponse, []AssetLibraryOperationResult, error) {
 	displayName = strings.TrimSpace(displayName)
 	if displayName == "" {
 		return nil, nil, errors.New("display name is required")
@@ -212,7 +244,7 @@ func CreateAssetLibraryGroup(ctx context.Context, userId int, displayName string
 			GroupId: group.Id, UserId: userId, UpstreamId: upstream.Id, Status: "Active",
 		}
 		upstreamGroupId, groupErr := createGroupOnTarget(ctx, upstream, displayName, groupType)
-		result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: groupErr == nil}
+		result := AssetLibraryOperationResult{Success: groupErr == nil}
 		if groupErr != nil {
 			mapping.Status = "Failed"
 			mapping.ErrorMessage = groupErr.Error()
@@ -232,7 +264,7 @@ func CreateAssetLibraryGroup(ctx context.Context, userId int, displayName string
 
 // AppendAssetLibraryFiles adds new assets to an existing group from uploaded
 // files.
-func AppendAssetLibraryFiles(ctx context.Context, userId int, groupId int64, files []*multipart.FileHeader) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+func AppendAssetLibraryFiles(ctx context.Context, userId int, groupId int64, files []*multipart.FileHeader) (*AssetLibraryGroupResponse, []AssetLibraryOperationResult, error) {
 	if len(files) == 0 {
 		return nil, nil, errors.New("at least one file is required")
 	}
@@ -247,7 +279,7 @@ func AppendAssetLibraryFiles(ctx context.Context, userId int, groupId int64, fil
 }
 
 // AppendAssetLibraryURLs adds new assets to an existing group from public URLs.
-func AppendAssetLibraryURLs(ctx context.Context, userId int, groupId int64, items []AssetURLInput) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+func AppendAssetLibraryURLs(ctx context.Context, userId int, groupId int64, items []AssetURLInput) (*AssetLibraryGroupResponse, []AssetLibraryOperationResult, error) {
 	if len(items) == 0 {
 		return nil, nil, errors.New("at least one url is required")
 	}
@@ -282,7 +314,7 @@ func AppendAssetLibraryURLs(ctx context.Context, userId int, groupId int64, item
 
 // appendAssetLibraryItems persists the local asset rows and uploads each to
 // every configured upstream.
-func appendAssetLibraryItems(ctx context.Context, userId int, groupId int64, stored []storedAssetFile) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+func appendAssetLibraryItems(ctx context.Context, userId int, groupId int64, stored []storedAssetFile) (*AssetLibraryGroupResponse, []AssetLibraryOperationResult, error) {
 	group, err := model.GetAssetLibraryGroup(userId, groupId)
 	if err != nil {
 		return nil, nil, err
@@ -330,7 +362,6 @@ func appendAssetLibraryItems(ctx context.Context, userId int, groupId int64, sto
 				groupMapping.ErrorMessage = groupErr.Error()
 				_ = model.SaveAssetLibraryGroupUpstream(groupMapping)
 				results = append(results, AssetLibraryOperationResult{
-					UpstreamId: upstream.Id, UpstreamName: upstream.Name,
 					Success: false, Message: groupErr.Error(),
 				})
 				continue
@@ -349,7 +380,7 @@ func appendAssetLibraryItems(ctx context.Context, userId int, groupId int64, sto
 }
 
 // UpdateAssetLibraryGroup renames the group locally.
-func UpdateAssetLibraryGroup(ctx context.Context, userId int, groupId int64, displayName string, description string) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+func UpdateAssetLibraryGroup(ctx context.Context, userId int, groupId int64, displayName string, description string) (*AssetLibraryGroupResponse, []AssetLibraryOperationResult, error) {
 	displayName = strings.TrimSpace(displayName)
 	if displayName == "" || len([]rune(displayName)) > 64 {
 		return nil, nil, errors.New("display name must contain 1 to 64 characters")
@@ -376,7 +407,7 @@ func UpdateAssetLibraryGroup(ctx context.Context, userId int, groupId int64, dis
 			continue
 		}
 		reqErr := updateGroupOnTarget(ctx, upstream, mapping.UpstreamGroupId, displayName)
-		result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: reqErr == nil}
+		result := AssetLibraryOperationResult{Success: reqErr == nil}
 		if reqErr != nil {
 			result.Message = reqErr.Error()
 			mapping.Status = "Failed"
@@ -398,7 +429,7 @@ func UpdateAssetLibraryGroup(ctx context.Context, userId int, groupId int64, dis
 
 // UpdateAssetLibraryAsset renames a single asset locally and on every upstream
 // it was pushed to.
-func UpdateAssetLibraryAsset(ctx context.Context, userId int, groupId int64, assetId int64, name string) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+func UpdateAssetLibraryAsset(ctx context.Context, userId int, groupId int64, assetId int64, name string) (*AssetLibraryGroupResponse, []AssetLibraryOperationResult, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len([]rune(name)) > 64 {
 		return nil, nil, errors.New("name must contain 1 to 64 characters")
@@ -430,7 +461,7 @@ func UpdateAssetLibraryAsset(ctx context.Context, userId int, groupId int64, ass
 			continue
 		}
 		reqErr := updateAssetOnTarget(ctx, upstream, mapping.UpstreamAssetId, name)
-		result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: reqErr == nil}
+		result := AssetLibraryOperationResult{Success: reqErr == nil}
 		if reqErr != nil {
 			result.Message = reqErr.Error()
 			mapping.Status = "Failed"
@@ -449,7 +480,7 @@ func UpdateAssetLibraryAsset(ctx context.Context, userId int, groupId int64, ass
 
 // RefreshAssetLibraryGroup polls every asset mapping so the stored status/URL
 // reflects the upstream processing state.
-func RefreshAssetLibraryGroup(ctx context.Context, userId int, groupId int64) (*model.AssetLibraryGroup, []AssetLibraryOperationResult, error) {
+func RefreshAssetLibraryGroup(ctx context.Context, userId int, groupId int64) (*AssetLibraryGroupResponse, []AssetLibraryOperationResult, error) {
 	group, err := model.GetAssetLibraryGroup(userId, groupId)
 	if err != nil {
 		return nil, nil, err
@@ -469,7 +500,7 @@ func RefreshAssetLibraryGroup(ctx context.Context, userId int, groupId int64) (*
 				continue
 			}
 			detail, reqErr := getAssetOnTarget(ctx, upstream, mapping.UpstreamAssetId)
-			result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: reqErr == nil}
+			result := AssetLibraryOperationResult{Success: reqErr == nil}
 			if reqErr != nil {
 				result.Message = reqErr.Error()
 				mapping.Status = "Failed"
@@ -522,7 +553,7 @@ func DeleteAssetLibraryGroup(ctx context.Context, userId int, groupId int64, for
 			continue
 		}
 		reqErr := deleteGroupOnTarget(ctx, upstream, mapping.UpstreamGroupId)
-		result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: reqErr == nil}
+		result := AssetLibraryOperationResult{Success: reqErr == nil}
 		if reqErr != nil {
 			allSucceeded = false
 			result.Message = reqErr.Error()
@@ -570,7 +601,7 @@ func DeleteAssetLibraryAsset(ctx context.Context, userId int, groupId int64, ass
 			continue
 		}
 		reqErr := deleteAssetOnTarget(ctx, upstream, mapping.UpstreamAssetId)
-		result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: reqErr == nil}
+		result := AssetLibraryOperationResult{Success: reqErr == nil}
 		if reqErr != nil {
 			allSucceeded = false
 			result.Message = reqErr.Error()
@@ -698,7 +729,7 @@ func deleteGroupOnTarget(ctx context.Context, upstream *model.AssetLibraryUpstre
 }
 
 func uploadAssetsToTarget(ctx context.Context, userId int, upstream *model.AssetLibraryUpstream, groupMapping *model.AssetLibraryGroupUpstream, items []storedAssetFile) AssetLibraryOperationResult {
-	result := AssetLibraryOperationResult{UpstreamId: upstream.Id, UpstreamName: upstream.Name, Success: true}
+	result := AssetLibraryOperationResult{Success: true}
 	for _, item := range items {
 		mapping := &model.AssetLibraryAssetUpstream{
 			AssetId: item.assetId, GroupUpstreamId: groupMapping.Id, UserId: userId,
@@ -1159,46 +1190,81 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func decorateAssetLibraryGroups(groups []model.AssetLibraryGroup) {
-	names := upstreamNameMap()
-	for i := range groups {
-		decorateAssetLibraryGroupWithNames(&groups[i], names)
-	}
-}
-
-func decorateAssetLibraryGroup(group *model.AssetLibraryGroup) {
-	decorateAssetLibraryGroupWithNames(group, upstreamNameMap())
-}
-
-func upstreamNameMap() map[int64]string {
-	upstreams, _ := model.ListAssetLibraryUpstreams()
-	names := make(map[int64]string, len(upstreams))
-	for i := range upstreams {
-		names[upstreams[i].Id] = upstreams[i].Name
-	}
-	return names
-}
-
-func decorateAssetLibraryGroupWithNames(group *model.AssetLibraryGroup, names map[int64]string) {
-	if group.Assets == nil {
-		group.Assets = []model.AssetLibraryAsset{}
-	}
-	if group.Mappings == nil {
-		group.Mappings = []model.AssetLibraryGroupUpstream{}
+func toGroupResponse(group *model.AssetLibraryGroup) AssetLibraryGroupResponse {
+	resp := AssetLibraryGroupResponse{
+		Id:          group.Id,
+		DisplayName: group.DisplayName,
+		Description: group.Description,
+		GroupType:   group.GroupType,
+		CoverURL:    group.CoverURL,
+		CreatedTime: group.CreatedTime,
+		UpdatedTime: group.UpdatedTime,
+		Status:      aggregateGroupStatus(group.Mappings),
+		Assets:      make([]AssetLibraryAssetResponse, 0, len(group.Assets)),
 	}
 	for i := range group.Assets {
-		if group.Assets[i].Mappings == nil {
-			group.Assets[i].Mappings = []model.AssetLibraryAssetUpstream{}
+		resp.Assets = append(resp.Assets, toAssetResponse(&group.Assets[i]))
+	}
+	return resp
+}
+
+func toAssetResponse(asset *model.AssetLibraryAsset) AssetLibraryAssetResponse {
+	resp := AssetLibraryAssetResponse{
+		Id:          asset.Id,
+		GroupId:     asset.GroupId,
+		Name:        asset.Name,
+		AssetType:   asset.AssetType,
+		SourceURL:   asset.SourceURL,
+		FileSize:    asset.FileSize,
+		MimeType:    asset.MimeType,
+		CreatedTime: asset.CreatedTime,
+		UpdatedTime: asset.UpdatedTime,
+	}
+	for i := range asset.Mappings {
+		m := &asset.Mappings[i]
+		if resp.AssetURL == "" && m.AssetURL != "" {
+			resp.AssetURL = m.AssetURL
+		}
+		if resp.AssetId == "" && m.UpstreamAssetId != "" {
+			resp.AssetId = m.UpstreamAssetId
 		}
 	}
-	for i := range group.Mappings {
-		group.Mappings[i].UpstreamName = names[group.Mappings[i].UpstreamId]
+	resp.Status = aggregateAssetStatus(asset.Mappings)
+	return resp
+}
+
+func aggregateGroupStatus(mappings []model.AssetLibraryGroupUpstream) string {
+	if len(mappings) == 0 {
+		return "Processing"
 	}
-	for i := range group.Assets {
-		for j := range group.Assets[i].Mappings {
-			group.Assets[i].Mappings[j].UpstreamName = names[group.Assets[i].Mappings[j].UpstreamId]
+	for _, m := range mappings {
+		if m.Status == "Failed" {
+			return "Failed"
 		}
 	}
+	for _, m := range mappings {
+		if m.Status == "Processing" || m.Status == "" {
+			return "Processing"
+		}
+	}
+	return "Active"
+}
+
+func aggregateAssetStatus(mappings []model.AssetLibraryAssetUpstream) string {
+	if len(mappings) == 0 {
+		return "Processing"
+	}
+	for _, m := range mappings {
+		if m.Status == "Failed" {
+			return "Failed"
+		}
+	}
+	for _, m := range mappings {
+		if m.Status == "Processing" || m.Status == "" {
+			return "Processing"
+		}
+	}
+	return "Active"
 }
 
 func inferAssetType(file *multipart.FileHeader) string {
